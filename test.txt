@@ -1,0 +1,693 @@
+// const natural = require('natural');
+// const compromise = require('compromise');
+
+// class FeedbackGenerator {
+//   constructor() {
+//     this.commonWords = this.loadCommonWords();
+//     this.academicWords = this.loadAcademicWords();
+//     this.commonMisspellings = this.loadCommonMisspellings();
+//   }
+
+//   async generate(params) {
+//     const {
+//       text,
+//       studentLevel,
+//       studentProfile,
+//       persistentIssues,
+//       score,
+//       qualityScores,
+//       recentPerformance
+//     } = params;
+
+//     const analysis = this.analyzeEssay(text);
+
+//     const feedback = {
+//       studentLevel,
+//       grammarErrors: this.detectGrammarErrors(text, studentLevel),
+//       spellingErrors: this.detectSpellingErrorsStrict(text),
+//       contentFeedback: this.generateContentFeedback(
+//         analysis,
+//         qualityScores.content,
+//         studentLevel
+//       ),
+//       organizationFeedback: this.generateOrganizationFeedback(
+//         analysis,
+//         qualityScores.organization,
+//         studentLevel
+//       ),
+//       summary: this.generatePersonalizedSummary({
+//         score,
+//         studentLevel,
+//         persistentIssues,
+//         recentPerformance,
+//         qualityScores,
+//         analysis
+//       })
+//     };
+
+//     return feedback;
+//   }
+
+//   analyzeEssay(text) {
+//     const doc = compromise(text);
+//     const sentences = text.split(/[.!?]+/).filter(s => s.trim());
+//     const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+//     const words = text.match(/\b\w+\b/g) || [];
+
+//     return {
+//       sentences,
+//       paragraphs,
+//       words,
+//       wordCount: words.length,
+//       sentenceCount: sentences.length,
+//       paragraphCount: paragraphs.length,
+//       nouns: doc.nouns().out('array'),
+//       verbs: doc.verbs().out('array'),
+//       adjectives: doc.adjectives().out('array'),
+//       hasIntroduction: this.hasIntroduction(paragraphs),
+//       hasConclusion: this.hasConclusion(paragraphs),
+//       hasThesis: this.hasThesis(text),
+//       transitions: this.findTransitions(sentences),
+//       avgSentenceLength: words.length / sentences.length,
+//       vocabularyDiversity: new Set(words.map(w => w.toLowerCase())).size / words.length
+//     };
+//   }
+
+//   /**
+//    * STRICT spelling detection - catches common mistakes
+//    */
+//   detectSpellingErrorsStrict(text) {
+//     const words = text.match(/\b[a-zA-Z]+\b/g) || [];
+//     const errors = [];
+//     const seen = new Set();
+
+//     words.forEach(word => {
+//       const lower = word.toLowerCase();
+
+//       if (seen.has(lower) || word.length <= 2) return;
+//       seen.add(lower);
+
+//       // Skip proper nouns (capitalized in middle of sentence)
+//       if (/^[A-Z]/.test(word) && word.length > 3) return;
+
+//       // Check common misspellings FIRST
+//       if (this.commonMisspellings.has(lower)) {
+//         const correction = this.commonMisspellings.get(lower);
+//         errors.push({
+//           word,
+//           correction,
+//           context: this.getContext(text, word),
+//           position: {
+//             start: text.indexOf(word),
+//             end: text.indexOf(word) + word.length
+//           }
+//         });
+//         return;
+//       }
+
+//       // Check if in dictionaries
+//       if (this.commonWords.has(lower) || this.academicWords.has(lower)) {
+//         return;
+//       }
+
+//       // More strict pattern checking
+//       if (this.hasObviousError(word)) {
+//         const suggestion = this.getSuggestion(word);
+//         errors.push({
+//           word,
+//           correction: suggestion,
+//           context: this.getContext(text, word),
+//           position: {
+//             start: text.indexOf(word),
+//             end: text.indexOf(word) + word.length
+//           }
+//         });
+//       }
+//     });
+
+//     return errors.slice(0, 20);
+//   }
+
+//   /**
+//    * Check for obvious spelling errors
+//    */
+//   hasObviousError(word) {
+//     const lower = word.toLowerCase();
+
+//     // Check against common dictionary with minimal leniency
+//     if (this.commonWords.has(lower)) return false;
+//     if (this.academicWords.has(lower)) return false;
+
+//     // Only accept if root is in dictionary
+//     const validSuffixes = ['ing', 'ed', 'er', 'est', 'ly', 's', 'es'];
+//     for (const suffix of validSuffixes) {
+//       if (lower.endsWith(suffix)) {
+//         const root = lower.slice(0, -suffix.length);
+//         if (this.commonWords.has(root)) {
+//           return false; // Valid word
+//         }
+//       }
+//     }
+
+//     // If we got here, likely misspelled
+//     return true;
+//   }
+
+//   /**
+//    * Detect grammar errors with MORE patterns
+//    */
+//   detectGrammarErrors(text, studentLevel) {
+//     const errors = [];
+//     const sentences = text.split(/[.!?]+/).filter(s => s.trim());
+
+//     sentences.forEach((sentence, idx) => {
+//       const trimmed = sentence.trim();
+//       if (!trimmed) return;
+
+//       // 1. Subject-verb agreement
+//       const svErrors = this.checkSubjectVerbAgreement(trimmed);
+//       svErrors.forEach(error => errors.push({
+//         ...error,
+//         explanation: this.getGrammarExplanation('subject_verb', studentLevel),
+//         severity: 'moderate'
+//       }));
+
+//       // 2. Missing articles
+//       const articleErrors = this.checkMissingArticles(trimmed);
+//       articleErrors.forEach(error => errors.push({
+//         ...error,
+//         explanation: this.getGrammarExplanation('articles', studentLevel),
+//         severity: 'minor'
+//       }));
+
+//       // 3. Wrong possessive (there/their/they're)
+//       const possessiveError = this.checkPossessives(trimmed);
+//       if (possessiveError) {
+//         errors.push({
+//           ...possessiveError,
+//           explanation: this.getGrammarExplanation('word_choice', studentLevel),
+//           severity: 'moderate'
+//         });
+//       }
+
+//       // 4. Missing contractions apostrophes (dont → don't)
+//       const contractionErrors = this.checkContractions(trimmed);
+//       contractionErrors.forEach(error => errors.push({
+//         ...error,
+//         explanation: "Contractions need apostrophes. Examples: don't, can't, won't, it's",
+//         severity: 'minor'
+//       }));
+//     });
+
+//     return errors.slice(0, 15);
+//   }
+
+//   /**
+//    * Check subject-verb agreement MORE thoroughly
+//    */
+//   checkSubjectVerbAgreement(sentence) {
+//     const errors = [];
+
+//     // Pattern 1: "he/she/it + base verb" (WRONG)
+//     const patterns1 = [
+//       { regex: /\b(he|she|it)\s+(go|do|have|say|help|write|need|want)\b/gi, correct: 's' },
+//     ];
+
+//     patterns1.forEach(({ regex, correct }) => {
+//       const matches = sentence.match(regex);
+//       if (matches) {
+//         matches.forEach(match => {
+//           const parts = match.split(/\s+/);
+//           const subject = parts[0];
+//           const verb = parts[1];
+//           errors.push({
+//             sentence,
+//             error: `Subject-verb agreement: "${subject}" requires "${verb}${correct}"`,
+//             correction: `Change "${verb}" to "${verb}${correct}"`,
+//             position: { start: sentence.indexOf(verb), end: sentence.indexOf(verb) + verb.length }
+//           });
+//         });
+//       }
+//     });
+
+//     // Pattern 2: Common errors
+//     const specificErrors = [
+//       { pattern: /\bhe don't\b/gi, correct: "he doesn't", issue: "don't" },
+//       { pattern: /\bshe don't\b/gi, correct: "she doesn't", issue: "don't" },
+//       { pattern: /\bit don't\b/gi, correct: "it doesn't", issue: "don't" },
+//       { pattern: /\bhe go\b/gi, correct: "he goes", issue: "go" },
+//       { pattern: /\bshe go\b/gi, correct: "she goes", issue: "go" },
+//       { pattern: /\bit help\b/gi, correct: "it helps", issue: "help" },
+//     ];
+
+//     specificErrors.forEach(({ pattern, correct, issue }) => {
+//       if (pattern.test(sentence)) {
+//         errors.push({
+//           sentence,
+//           error: `Should be "${correct}"`,
+//           correction: `Change to "${correct}"`,
+//           position: { start: sentence.indexOf(issue), end: sentence.indexOf(issue) + issue.length }
+//         });
+//       }
+//     });
+
+//     return errors;
+//   }
+
+//   /**
+//    * Check missing articles
+//    */
+//   checkMissingArticles(sentence) {
+//     const errors = [];
+
+//     // Pattern: "...have laptop" (should be "have a laptop")
+//     const noArticlePattern = /\b(have|has|need|needs|want|wants|buy|bought)\s+([a-z]+)\b/gi;
+//     const matches = sentence.matchAll(noArticlePattern);
+
+//     for (const match of matches) {
+//       const verb = match[1];
+//       const noun = match[2];
+
+//       // Check if noun is singular countable (simple heuristic)
+//       if (!['time', 'water', 'money', 'information', 'access'].includes(noun.toLowerCase())) {
+//         if (!['the', 'a', 'an', 'my', 'your', 'their'].some(article =>
+//           sentence.toLowerCase().includes(`${article} ${noun.toLowerCase()}`))) {
+
+//           const article = /^[aeiou]/i.test(noun) ? 'an' : 'a';
+//           errors.push({
+//             sentence,
+//             error: `Missing article before "${noun}"`,
+//             correction: `Add "${article}" before "${noun}"`,
+//             position: { start: sentence.indexOf(noun), end: sentence.indexOf(noun) + noun.length }
+//           });
+//         }
+//       }
+//     }
+
+//     return errors;
+//   }
+
+//   /**
+//    * Check possessive errors (there/their/they're)
+//    */
+//   checkPossessives(sentence) {
+//     // Pattern: "know there mistakes" (should be "their")
+//     if (/\bknow\s+there\s+\w+s\b/i.test(sentence)) {
+//       return {
+//         sentence,
+//         error: 'Wrong word: "there" vs "their"',
+//         correction: 'Use "their" for possession (their mistakes)',
+//         position: { start: sentence.indexOf('there'), end: sentence.indexOf('there') + 5 }
+//       };
+//     }
+
+//     // Pattern: "there way of" (should be "their")
+//     if (/\bthere\s+(way|idea|approach|method)\s+of\b/i.test(sentence)) {
+//       return {
+//         sentence,
+//         error: 'Wrong word: "there" vs "their"',
+//         correction: 'Use "their" for possession',
+//         position: { start: sentence.indexOf('there'), end: sentence.indexOf('there') + 5 }
+//       };
+//     }
+
+//     return null;
+//   }
+
+//   /**
+//    * Check missing apostrophes in contractions
+//    */
+//   checkContractions(sentence) {
+//     const errors = [];
+
+//     const contractions = [
+//       { wrong: /\bdont\b/gi, correct: "don't" },
+//       { wrong: /\bcant\b/gi, correct: "can't" },
+//       { wrong: /\bwont\b/gi, correct: "won't" },
+//       { wrong: /\bdidnt\b/gi, correct: "didn't" },
+//       { wrong: /\bisnt\b/gi, correct: "isn't" },
+//       { wrong: /\barent\b/gi, correct: "aren't" },
+//       { wrong: /\bwasnt\b/gi, correct: "wasn't" },
+//       { wrong: /\bwerent\b/gi, correct: "weren't" },
+//     ];
+
+//     contractions.forEach(({ wrong, correct }) => {
+//       const matches = sentence.match(wrong);
+//       if (matches) {
+//         matches.forEach(match => {
+//           errors.push({
+//             sentence,
+//             error: `Missing apostrophe in "${match}"`,
+//             correction: `Change "${match}" to "${correct}"`,
+//             position: { start: sentence.indexOf(match), end: sentence.indexOf(match) + match.length }
+//           });
+//         });
+//       }
+//     });
+
+//     return errors;
+//   }
+
+//   getGrammarExplanation(errorType, level) {
+//     const explanations = {
+//       subject_verb: {
+//         beginner: "The subject and verb must agree. 'He/she/it' needs verb ending in 's'. Example: 'He walks' not 'He walk'.",
+//         intermediate: "Subject-verb agreement means singular subjects need singular verbs (adds 's').",
+//         advanced: "Ensure subject-verb agreement, especially with third-person singular."
+//       },
+//       articles: {
+//         beginner: "Use 'a' or 'an' before singular countable nouns. Example: 'a laptop', 'an essay'.",
+//         intermediate: "Articles 'a/an/the' are needed before singular countable nouns.",
+//         advanced: "Use appropriate articles based on specificity and countability."
+//       },
+//       word_choice: {
+//         beginner: "Some words sound alike but mean different things. 'There' = place, 'Their' = ownership.",
+//         intermediate: "Distinguish homophones: there/their/they're, its/it's, your/you're.",
+//         advanced: "Pay attention to commonly confused words in context."
+//       }
+//     };
+
+//     return explanations[errorType]?.[level] || explanations[errorType]?.intermediate;
+//   }
+
+//   getSuggestion(word) {
+//     const lower = word.toLowerCase();
+//     let bestMatch = word;
+//     let minDistance = Infinity;
+
+//     // Check common words
+//     for (const dictWord of this.commonWords) {
+//       if (Math.abs(dictWord.length - lower.length) > 2) continue;
+
+//       const distance = natural.LevenshteinDistance(lower, dictWord);
+//       if (distance < minDistance && distance <= 2) {
+//         minDistance = distance;
+//         bestMatch = dictWord;
+//       }
+//     }
+
+//     return bestMatch;
+//   }
+
+//   getContext(text, word) {
+//     const index = text.indexOf(word);
+//     const start = Math.max(0, index - 30);
+//     const end = Math.min(text.length, index + word.length + 30);
+//     return '...' + text.substring(start, end) + '...';
+//   }
+
+//   generateContentFeedback(analysis, contentScore, level) {
+//     const strengths = [];
+//     const improvements = [];
+//     const examples = [];
+
+//     const normalizedScore = contentScore * 100;
+
+//     if (analysis.hasThesis) {
+//       strengths.push("Thesis statement present");
+//     }
+//     if (analysis.vocabularyDiversity > 0.5) {
+//       strengths.push("Good vocabulary variety");
+//     }
+//     if (analysis.transitions.length >= 3) {
+//       strengths.push("Uses transition words");
+//     }
+
+//     if (level === 'beginner') {
+//       if (!analysis.hasThesis) {
+//         improvements.push("Add a clear thesis statement at the end of your introduction");
+//       }
+
+//       if (analysis.transitions.length < 3) {
+//         improvements.push("Use more transition words between paragraphs");
+//       }
+
+//       if (analysis.avgSentenceLength < 10) {
+//         improvements.push("Try to write longer, more detailed sentences");
+//         examples.push({
+//           type: 'suggestion',
+//           text: "Instead of 'Feedback is important. It helps students.' try 'Feedback is important because it helps students understand their mistakes.'",
+//           explanation: "Combine related ideas into one sentence"
+//         });
+//       }
+//     }
+
+//     return { strengths, improvements, examples };
+//   }
+
+//   generateOrganizationFeedback(analysis, orgScore, level) {
+//     const suggestions = [];
+
+//     if (!analysis.hasIntroduction) {
+//       suggestions.push("Add a clear introduction with background information");
+//     }
+
+//     if (!analysis.hasConclusion) {
+//       suggestions.push("Include a conclusion that summarizes your main points");
+//     }
+
+//     if (analysis.paragraphCount < 4) {
+//       suggestions.push("Break your essay into more paragraphs (aim for 5-6)");
+//     }
+
+//     if (analysis.transitions.length < 3) {
+//       suggestions.push("Use transition words like 'Moreover', 'However', 'Furthermore'");
+//     }
+
+//     const structure = this.assessStructure(analysis);
+//     return { structure, suggestions };
+//   }
+
+//   generatePersonalizedSummary(params) {
+//     const { score, studentLevel, qualityScores, analysis } = params;
+
+//     let overallComment = '';
+//     let motivationalMessage = '';
+//     const keyTakeaways = [];
+//     const nextSteps = [];
+
+//     const avgQuality = (qualityScores.grammar + qualityScores.content +
+//                        qualityScores.organization + qualityScores.style +
+//                        qualityScores.mechanics) / 5;
+//     const normalizedAvg = avgQuality * 100;
+
+//     if (normalizedAvg >= 85) {
+//       overallComment = "Excellent work! Strong writing demonstrated.";
+//     } else if (normalizedAvg >= 75) {
+//       overallComment = "Good effort! Solid foundation with room to grow.";
+//     } else if (normalizedAvg >= 65) {
+//       overallComment = "Making progress. Focus on the areas highlighted in feedback.";
+//     } else {
+//       overallComment = "Keep practicing! Work on the errors identified above.";
+//     }
+
+//     if (studentLevel === 'beginner') {
+//       motivationalMessage = "You're building important foundations! Focus on spelling and grammar first.";
+//     } else if (studentLevel === 'intermediate') {
+//       motivationalMessage = "You're developing strong skills! Work on sentence variety and organization.";
+//     } else {
+//       motivationalMessage = "Your writing shows maturity! Refine your argumentation and style.";
+//     }
+
+//     if (qualityScores.grammar * 100 < 75) {
+//       keyTakeaways.push("Review grammar and spelling errors highlighted above");
+//     }
+//     if (qualityScores.organization * 100 < 75) {
+//       keyTakeaways.push("Improve essay structure with clear paragraphs");
+//     }
+//     if (qualityScores.content * 100 < 75) {
+//       keyTakeaways.push("Develop your arguments with more detail");
+//     }
+
+//     nextSteps.push("Correct all spelling and grammar errors");
+//     nextSteps.push("Read your essay aloud to catch mistakes");
+//     nextSteps.push("Check each paragraph has one main idea");
+
+//     return { overallComment, motivationalMessage, keyTakeaways, nextSteps };
+//   }
+
+//   hasIntroduction(paragraphs) {
+//     if (paragraphs.length === 0) return false;
+
+//     const first = paragraphs[0].toLowerCase();
+//     const indicators = [
+//       'introduction', 'this essay', 'will discuss', 'will explore',
+//       'will examine', 'will analyze', 'is important', 'focuses on'
+//     ];
+
+//     const words = first.split(/\s+/);
+//     return words.length >= 30 && indicators.some(ind => first.includes(ind));
+//   }
+
+//   hasConclusion(paragraphs) {
+//     if (paragraphs.length === 0) return false;
+
+//     const last = paragraphs[paragraphs.length - 1].toLowerCase();
+//     const indicators = [
+//       'conclusion', 'in summary', 'to conclude', 'in conclusion',
+//       'to sum up', 'overall', 'ultimately', 'in the end', 'conclution'
+//     ];
+
+//     const words = last.split(/\s+/);
+//     return words.length >= 30 && indicators.some(ind => last.includes(ind));
+//   }
+
+//   hasThesis(text) {
+//     const first500 = text.substring(0, 500).toLowerCase();
+//     const indicators = [
+//       'will discuss', 'will explore', 'will examine', 'focuses on',
+//       'this essay', 'main point', 'argue that', 'will show'
+//     ];
+//     return indicators.some(ind => first500.includes(ind));
+//   }
+
+//   findTransitions(sentences) {
+//     const transitions = [
+//       'however', 'therefore', 'moreover', 'furthermore', 'firstly',
+//       'secondly', 'finally', 'in addition', 'on the other hand',
+//       'consequently', 'as a result', 'for example', 'for instance',
+//       'similarly', 'likewise', 'in contrast', 'nevertheless', 'also'
+//     ];
+//     const found = [];
+
+//     sentences.forEach(s => {
+//       const lower = s.toLowerCase();
+//       transitions.forEach(t => {
+//         if (lower.includes(t) && !found.includes(t)) {
+//           found.push(t);
+//         }
+//       });
+//     });
+
+//     return found;
+//   }
+
+//   assessStructure(analysis) {
+//     if (analysis.hasIntroduction && analysis.hasConclusion && analysis.paragraphCount >= 5) {
+//       return "Well-structured with introduction, body paragraphs, and conclusion";
+//     } else if (analysis.hasIntroduction && analysis.hasConclusion) {
+//       return "Has introduction and conclusion, but needs more body paragraphs";
+//     } else if (analysis.paragraphCount >= 4) {
+//       return "Basic structure present, needs clearer introduction/conclusion";
+//     } else {
+//       return "Needs better organization with clear sections";
+//     }
+//   }
+
+//   /**
+//    * Load common misspellings with corrections
+//    */
+//   loadCommonMisspellings() {
+//     const misspellings = new Map([
+//       // From user's essay
+//       ['importent', 'important'],
+//       ['becouse', 'because'],
+//       ['dont', "don't"],
+//       ['writting', 'writing'],
+//       ['technolgy', 'technology'],
+//       ['discuse', 'discuss'],
+//       ['contries', 'countries'],
+//       ['explaination', 'explanation'],
+//       ['plagirism', 'plagiarism'],
+//       ['writen', 'written'],
+//       ['conclution', 'conclusion'],
+//       ['grammer', 'grammar'],
+//       ['seperate', 'separate'],
+//       ['definately', 'definitely'],
+//       ['occured', 'occurred'],
+//       ['recieve', 'receive'],
+//       ['untill', 'until'],
+//       ['sucessful', 'successful'],
+//       ['occassion', 'occasion'],
+//       ['beleive', 'believe'],
+//       ['acheive', 'achieve'],
+//       ['wierd', 'weird'],
+//       ['freind', 'friend'],
+//       ['goverment', 'government'],
+//       ['enviroment', 'environment'],
+//       ['begining', 'beginning'],
+//       ['calender', 'calendar'],
+//       ['cemetary', 'cemetery'],
+//       ['concious', 'conscious'],
+//       ['existance', 'existence'],
+//       ['foriegn', 'foreign'],
+//       ['guage', 'gauge'],
+//       ['harrass', 'harass'],
+//       ['independant', 'independent'],
+//       ['judgement', 'judgment'],
+//       ['knowlege', 'knowledge'],
+//       ['liason', 'liaison'],
+//       ['maintainance', 'maintenance'],
+//       ['neccessary', 'necessary'],
+//       ['occurance', 'occurrence'],
+//       ['persistant', 'persistent'],
+//       ['questionaire', 'questionnaire'],
+//       ['refered', 'referred'],
+//       ['sentance', 'sentence'],
+//       ['thier', 'their'],
+//       ['truely', 'truly'],
+//       ['unfortunatly', 'unfortunately'],
+//       ['vaccum', 'vacuum'],
+//       ['wheather', 'whether']
+//     ]);
+
+//     return misspellings;
+//   }
+
+//   /**
+//    * Expanded common words dictionary
+//    */
+//   loadCommonWords() {
+//     const words = [
+//       // Core words
+//       'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for', 'not', 'on', 'with',
+//       'he', 'as', 'you', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her',
+//       'she', 'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what', 'so', 'up',
+//       'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me', 'when', 'make', 'can', 'like', 'time',
+//       'no', 'just', 'him', 'know', 'take', 'people', 'into', 'year', 'your', 'good', 'some', 'could',
+//       'them', 'see', 'other', 'than', 'then', 'now', 'look', 'only', 'come', 'its', 'over', 'think',
+//       'also', 'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way', 'even',
+//       'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us', 'is', 'was', 'are',
+
+//       // Essay-related
+//       'student', 'students', 'essay', 'essays', 'write', 'writing', 'writer', 'paragraph', 'paragraphs',
+//       'introduction', 'conclusion', 'thesis', 'argument', 'arguments', 'evidence', 'example', 'examples',
+//       'university', 'school', 'teacher', 'teachers', 'professor', 'professors', 'education', 'learning',
+//       'feedback', 'grade', 'grading', 'score', 'scoring', 'system', 'systems', 'tool', 'tools',
+//       'technology', 'automated', 'automatic', 'online', 'digital', 'handwritten', 'typing', 'typed',
+
+//       // Common adjectives
+//       'important', 'good', 'better', 'best', 'bad', 'worse', 'worst', 'big', 'small', 'long', 'short',
+//       'difficult', 'easy', 'hard', 'simple', 'complex', 'clear', 'different', 'same', 'many', 'few',
+//       'much', 'less', 'more', 'most', 'every', 'each', 'some', 'any', 'no', 'another', 'other',
+
+//       // Common verbs
+//       'help', 'helps', 'helped', 'helping', 'need', 'needs', 'needed', 'needing', 'want', 'wants',
+//       'show', 'shows', 'showing', 'showed', 'give', 'gives', 'giving', 'gave', 'given', 'tell', 'tells',
+//       'check', 'checks', 'checking', 'checked', 'improve', 'improves', 'improved', 'improving',
+//       'learn', 'learns', 'learned', 'learning', 'understand', 'understands', 'understood', 'understanding',
+
+//       // More words
+//       'however', 'therefore', 'moreover', 'furthermore', 'although', 'though', 'while', 'since',
+//       'should', 'would', 'could', 'might', 'must', 'may', 'shall', 'should', 'ought',
+//       'never', 'always', 'sometimes', 'often', 'usually', 'rarely', 'seldom', 'frequently',
+//       'very', 'too', 'quite', 'rather', 'really', 'actually', 'especially', 'particularly',
+//       'already', 'still', 'yet', 'again', 'once', 'twice', 'once', 'never', 'ever'
+//     ];
+
+//     return new Set(words);
+//   }
+
+//   loadAcademicWords() {
+//     const words = [
+//       'analysis', 'approach', 'area', 'assessment', 'concept', 'context', 'data', 'definition',
+//       'evidence', 'factors', 'function', 'indicate', 'interpretation', 'method', 'process',
+//       'research', 'significant', 'theory', 'therefore', 'however', 'moreover', 'furthermore',
+//       'consequently', 'nevertheless', 'nonetheless', 'accordingly', 'similarly'
+//     ];
+
+//     return new Set(words);
+//   }
+// }
+
+// module.exports = FeedbackGenerator;
