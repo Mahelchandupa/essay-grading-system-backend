@@ -1,240 +1,3 @@
-// const mongoose = require('mongoose');
-
-// const essaySchema = new mongoose.Schema({
-//   studentId: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'Student',
-//     required: true,
-//     index: true
-//   },
-
-//   // Essay content
-//   originalText: String,  // Extracted from handwritten/PDF/Word
-//   processedText: String,  // Cleaned text for analysis
-
-//   // File information
-//   fileType: {
-//     type: String,
-//     enum: ['handwritten', 'pdf', 'word', 'text']
-//   },
-//   originalFileName: String,
-//   filePath: String,  // S3 or local storage path
-
-//   // OCR information (for handwritten)
-//   ocrConfidence: Number,  // 0-1
-//   ocrProcessedText: String,
-//   ocrCorrected: Boolean,
-
-//   // Grading results
-//   grading: {
-//     rawScore: Number,  // Model output
-//     normalizedScore: Number,  // 0-29
-//     finalScore: Number,  // Mapped to original scale
-//     maxScore: Number,
-
-//     confidence: Number,  // Model confidence 0-1
-
-//     // Quality breakdown
-//     qualityScores: {
-//       grammar: Number,      // 0-1
-//       content: Number,      // 0-1
-//       organization: Number, // 0-1
-//       style: Number,        // 0-1
-//       mechanics: Number     // 0-1
-//     }
-//   },
-
-//   // Detailed feedback
-//   feedback: {
-//     // Level-adapted feedback
-//     studentLevel: String,
-
-//     // Grammar issues
-//     grammarErrors: [{
-//       sentence: String,
-//       error: String,
-//       correction: String,
-//       explanation: String,
-//       position: { start: Number, end: Number },
-//       severity: String  // 'minor', 'moderate', 'severe'
-//     }],
-
-//     // Spelling issues
-//     spellingErrors: [{
-//       word: String,
-//       correction: String,
-//       context: String,
-//       position: { start: Number, end: Number }
-//     }],
-
-//     // Content feedback
-//     contentFeedback: {
-//       strengths: [String],
-//       improvements: [String],
-//       examples: [{
-//         type: String,  // 'before', 'after', 'suggestion'
-//         text: String,
-//         explanation: String
-//       }]
-//     },
-
-//     // Organization feedback
-//     organizationFeedback: {
-//       structure: String,
-//       suggestions: [String]
-//     },
-
-//     // Overall summary
-//     summary: {
-//       overallComment: String,
-//       motivationalMessage: String,  // Personalized based on student context
-//       keyTakeaways: [String],
-//       nextSteps: [String]
-//     }
-//   },
-
-//   // Detected issues for tracking
-//   detectedIssues: [{
-//     type: String,
-//     severity: Number,
-//     description: String
-//   }],
-
-//   // Metadata
-//   submittedAt: {
-//     type: Date,
-//     default: Date.now
-//   },
-//   gradedAt: Date,
-//   processingTime: Number,  // milliseconds
-
-//   // Status
-//   status: {
-//     type: String,
-//     enum: ['pending', 'processing', 'graded', 'error'],
-//     default: 'pending'
-//   },
-//   errorMessage: String
-// }, {
-//   timestamps: true
-// });
-
-// // Index for efficient queries
-// essaySchema.index({ studentId: 1, submittedAt: -1 });
-// essaySchema.index({ status: 1 });
-
-// module.exports = mongoose.model('Essay', essaySchema);
-
-// const mongoose = require('mongoose');
-
-// const essaySchema = new mongoose.Schema({
-//   studentId: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'Student',
-//     required: true,
-//     index: true
-//   },
-
-//   originalText: String,
-//   processedText: String,
-
-//   fileType: {
-//     type: String,
-//     enum: ['handwritten', 'pdf', 'word', 'text']
-//   },
-//   originalFileName: String,
-//   filePath: String,
-
-//   ocrConfidence: Number,
-//   ocrProcessedText: String,
-//   ocrCorrected: Boolean,
-
-//   grading: {
-//     rawScore: Number,
-//     normalizedScore: Number,
-//     finalScore: Number,
-//     maxScore: Number,
-//     confidence: Number,
-
-//     qualityScores: {
-//       grammar: Number,
-//       content: Number,
-//       organization: Number,
-//       style: Number,
-//       mechanics: Number
-//     }
-//   },
-
-//   feedback: {
-//     studentLevel: String,
-
-//     grammarErrors: [{
-//       sentence: String,
-//       error: String,
-//       correction: String,
-//       explanation: String,
-//       position: { start: Number, end: Number },
-//       severity: String
-//     }],
-
-//     spellingErrors: [{
-//       word: String,
-//       correction: String,
-//       context: String,
-//       position: { start: Number, end: Number }
-//     }],
-
-//     contentFeedback: {
-//       strengths: [String],
-//       improvements: [String],
-//       examples: [{  // ✅ This must be array of objects
-//         type: String,
-//         text: String,
-//         explanation: String
-//       }]
-//     },
-
-//     organizationFeedback: {
-//       structure: String,
-//       suggestions: [String]
-//     },
-
-//     summary: {
-//       overallComment: String,
-//       motivationalMessage: String,
-//       keyTakeaways: [String],
-//       nextSteps: [String]
-//     }
-//   },
-
-//   detectedIssues: [{  // ✅ This must be array of objects
-//     type: String,
-//     severity: Number,
-//     description: String
-//   }],
-
-//   submittedAt: {
-//     type: Date,
-//     default: Date.now
-//   },
-//   gradedAt: Date,
-//   processingTime: Number,
-
-//   status: {
-//     type: String,
-//     enum: ['pending', 'processing', 'graded', 'error'],
-//     default: 'pending'
-//   },
-//   errorMessage: String
-// }, {
-//   timestamps: true
-// });
-
-// essaySchema.index({ studentId: 1, submittedAt: -1 });
-// essaySchema.index({ status: 1 });
-
-// module.exports = mongoose.model('Essay', essaySchema);
-
 const mongoose = require("mongoose");
 
 const essaySchemaV2 = new mongoose.Schema(
@@ -246,8 +9,50 @@ const essaySchemaV2 = new mongoose.Schema(
       index: true,
     },
 
+    title: {
+      type: String,
+      required: false,
+      trim: true,
+      maxlength: 200,
+    },
     originalText: String,
     processedText: String,
+    fullyCorrectedText: {
+      type: String,
+      default: "",
+    },
+    essayStructure: {
+      title: {
+        type: String,
+        default: null,
+      },
+      sections: [String],
+      paragraphs: [
+        {
+          section: {
+            type: String,
+            default: "",
+          },
+          text: {
+            type: String,
+            required: true,
+          },
+          correctedText: {
+            type: String,
+            default: "",
+          },
+          order: {
+            type: Number,
+            default: 0,
+          },
+        },
+      ],
+      // Store formatted version
+      formattedText: {
+        type: String,
+        default: "",
+      },
+    },
     fileType: {
       type: String,
       enum: ["handwritten", "pdf", "word", "text"],
@@ -278,10 +83,17 @@ const essaySchemaV2 = new mongoose.Schema(
       vocabularyEnhancements: [{ type: mongoose.Schema.Types.Mixed }], // NEW
       sentenceStructure: { type: mongoose.Schema.Types.Mixed }, // NEW
 
+      // Before/After examples
+      beforeAfterExamples: [
+        {
+          type: mongoose.Schema.Types.Mixed,
+        },
+      ],
+
       contentFeedback: {
         strengths: [String],
         improvements: [String],
-        examples: [{ type: mongoose.Schema.Types.Mixed }], // ✅ Use Mixed to bypass strict validation
+        examples: [{ type: mongoose.Schema.Types.Mixed }],
       },
 
       organizationFeedback: {
@@ -300,7 +112,7 @@ const essaySchemaV2 = new mongoose.Schema(
       },
     },
 
-    detectedIssues: [{ type: mongoose.Schema.Types.Mixed }], // ✅ Use Mixed
+    detectedIssues: [{ type: mongoose.Schema.Types.Mixed }],
 
     submittedAt: { type: Date, default: Date.now },
     gradedAt: Date,
@@ -309,10 +121,37 @@ const essaySchemaV2 = new mongoose.Schema(
       enum: ["pending", "processing", "graded", "error"],
       default: "pending",
     },
+
+    plagiarism: {
+      overallSimilarity: Number,
+      isPlagiarized: Boolean,
+      confidence: Number,
+      checkedChunks: Number,
+      citations: [mongoose.Schema.Types.Mixed],
+      method: String,
+      details: {
+        previousSubmissions: [mongoose.Schema.Types.Mixed],
+        suspiciousPatterns: [mongoose.Schema.Types.Mixed],
+        statistics: mongoose.Schema.Types.Mixed,
+        properCitations: Number,
+      },
+      detectedAt: Date,
+    },
+
+    achievementsUnlocked: [
+      {
+        badgeId: String,
+        unlockedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        points: Number,
+      },
+    ],
   },
   {
     timestamps: true,
-    strict: false, // ✅ Disable strict mode temporarily
+    strict: false, // Disable strict mode temporarily
   }
 );
 

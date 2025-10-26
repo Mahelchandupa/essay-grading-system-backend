@@ -40,10 +40,15 @@ EssayGradingService.initialize()
 const authRoutes = require('./routes/auth.routes');
 const essayRoutes = require('./routes/essay.routes');
 const studentRoutes = require('./routes/student.routes');
+const analyticsRoutes = require('./routes/analytics.route');
+const achievementRoutes = require("./routes/achievementRoutes");
+const errorHandler = require('./middleware/errorHandler');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/essays', essayRoutes);
 app.use('/api/students', studentRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use("/api/achievements", achievementRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -55,19 +60,42 @@ app.get('/health', (req, res) => {
 });
 
 // Error handling
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
+// app.use((err, req, res, next) => {
+//   console.error('Error:', err);
+//   res.status(err.status || 500).json({
+//     error: err.message || 'Internal server error',
+//     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+//   });
+// });
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5003;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 module.exports = app;
+
+
+// const express = require('express');
+// const app = express();
+
+// // Absolute minimum server
+// app.get('/health', (req, res) => {
+//   console.log('Health check!');
+//   res.json({ status: 'ok', time: new Date().toISOString() });
+// });
+
+// app.get('/api/auth/health', (req, res) => {
+//   console.log('Auth health check!');
+//   res.json({ status: 'ok', service: 'auth' });
+// });
+
+// const PORT = 5003;
+// app.listen(PORT, () => {
+//   console.log(`🚀 Simple server running on ${PORT}`);
+// });
+

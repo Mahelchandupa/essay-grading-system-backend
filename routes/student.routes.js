@@ -1,17 +1,19 @@
 const express = require("express");
 const router = express.Router();
+const { authenticateUser } = require("../middleware/authMiddleware");
 const Student = require("../models/Student");
+const { createError } = require("../utils/errorResponse");
 
 /**
- * GET /api/students/:studentId
+ * GET /api/students/
  * Get student profile
  */
-router.get("/:studentId", async (req, res) => {
+router.get("/", authenticateUser, async (req, res) => {
   try {
-    const student = await Student.findOne({ studentId: req.params.studentId });
+    const student = await Student.findOne({ studentId: req.studentId });
 
     if (!student) {
-      return res.status(404).json({ error: "Student not found" });
+    throw createError('NOT_FOUND', "Student not found");
     }
 
     res.json({
@@ -27,20 +29,21 @@ router.get("/:studentId", async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    // res.status(500).json({ error: error.message });
+    throw createError('INTERNAL_ERROR',  error.message)
   }
 });
 
 /**
- * GET /api/students/:studentId/progress
+ * GET /api/students/progress
  * Get student progress over time
  */
-router.get("/:studentId/progress", async (req, res) => {
+router.get("/progress", authenticateUser, async (req, res) => {
   try {
-    const student = await Student.findOne({ studentId: req.params.studentId });
+    const student = await Student.findOne({ studentId: req.studentId });
 
     if (!student) {
-      return res.status(404).json({ error: "Student not found" });
+    throw createError('NOT_FOUND', "Student not found");
     }
 
     const Essay = require("../models/Essay");
@@ -65,6 +68,7 @@ router.get("/:studentId/progress", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+    throw createError('INTERNAL_ERROR',  error.message)
   }
 });
 

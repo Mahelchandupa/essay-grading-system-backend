@@ -1,26 +1,83 @@
 const natural = require("natural");
 const compromise = require("compromise");
 const SpellChecker = require("simple-spellchecker");
-const writeGood = require("write-good");
 const axios = require("axios");
 
+/**
+ * ✅ COMPREHENSIVE FeedbackGenerator Class
+ * Handles ALL feedback generation logic in one place
+ */
 class FeedbackGenerator {
   constructor() {
     this.dictionary = null;
     this.dictionaryReady = false;
     this.initializeDictionary();
-
-    // Cache for API calls to avoid rate limiting
     this.definitionCache = new Map();
-    this.maxCacheSize = 2000;
-  }
+    this.maxCacheSize = 1000;
 
-  // Clear cache periodically
-  clearOldCache() {
-    if (this.definitionCache.size > this.maxCacheSize) {
-      const entries = Array.from(this.definitionCache.entries());
-      this.definitionCache = new Map(entries.slice(-500));
-    }
+    // Technical vocabulary whitelist
+    this.technicalVocabulary = new Set([
+      "ai",
+      "chatbot",
+      "chatbots",
+      "algorithm",
+      "algorithms",
+      "covid",
+      "cryptocurrency",
+      "blockchain",
+      "wifi",
+      "smartphone",
+      "smartphones",
+      "chatgpt",
+      "google",
+      "facebook",
+      "instagram",
+      "youtube",
+      "netflix",
+      "tesla",
+      "uber",
+      "amazon",
+      "microsoft",
+      "iphone",
+      "android",
+      "app",
+      "apps",
+      "email",
+      "emails",
+      "online",
+      "offline",
+      "webpage",
+      "website",
+      "internet",
+      "cyber",
+      "cybersecurity",
+      "software",
+      "hardware",
+      "database",
+      "api",
+      "server",
+      "servers",
+      "cloud",
+      "analytics",
+      "automated",
+      "automation",
+    ]);
+
+    // Common student vocabulary
+    this.commonModernWords = new Set([
+      "okay",
+      "ok",
+      "yeah",
+      "gonna",
+      "wanna",
+      "gotta",
+      "lot",
+      "lots",
+      "kinda",
+      "sorta",
+      "cause",
+      "cuz",
+    ]);
   }
 
   async initializeDictionary() {
@@ -39,6 +96,10 @@ class FeedbackGenerator {
     });
   }
 
+  /**
+   * MAIN FEEDBACK GENERATION METHOD
+   * Generates complete feedback object matching JSON structure
+   */
   async generate(params) {
     const {
       text,
@@ -48,1037 +109,793 @@ class FeedbackGenerator {
       score,
       qualityScores,
       recentPerformance,
+      ocrCorrections,
+      grammarErrors = [],
+      spellingErrors = [],
+      essayStructure = null,
     } = params;
 
-    // Wait for dictionary to be ready
     if (!this.dictionaryReady) {
       await this.initializeDictionary();
     }
 
-    const analysis = this.analyzeEssay(text);
+    console.log("📝 Generating comprehensive feedback...");
 
-    const feedback = {
+    const analysis = this.analyzeEssay(text, essayStructure);
+
+    // ✅ Style suggestions
+    const styleSuggestions = this.detectStyleSuggestions(text, studentLevel);
+
+    // ✅ Generate feedback messages for each category
+    const grammarFeedbackMessage = this.generateGrammarFeedbackMessage(
+      grammarErrors,
+      studentLevel
+    );
+    const spellingFeedbackMessage = this.generateSpellingFeedbackMessage(
+      spellingErrors,
+      studentLevel
+    );
+    const styleFeedbackMessage =
+      styleSuggestions.length > 0
+        ? this.generateStyleFeedback(styleSuggestions, studentLevel)
+        : null;
+
+    // ✅ Generate before/after examples with explanations
+    const beforeAfterExamples = await this.generateBeforeAfterExamples(
+      text,
+      grammarErrors,
+      spellingErrors,
+      styleSuggestions,
+      studentLevel
+    );
+
+    // ✅ Generate positive feedback
+    const positiveFeedback = this.generatePositiveFeedback(
+      text,
       studentLevel,
-      grammarErrors: await this.detectGrammarErrors(text, studentLevel),
-      spellingErrors: await this.detectSpellingErrors(text, studentLevel),
-      styleIssues: this.detectStyleIssues(text, studentLevel),
-      vocabularyEnhancements: await this.suggestVocabularyEnhancements(
-        text,
-        studentLevel
-      ),
-      sentenceStructure: this.analyzeSentenceStructure(analysis, studentLevel),
-      contentFeedback: this.generateContentFeedback(
-        analysis,
-        qualityScores.content,
-        studentLevel
-      ),
-      organizationFeedback: this.generateOrganizationFeedback(
-        analysis,
-        qualityScores.organization,
-        studentLevel
-      ),
-      summary: this.generatePersonalizedSummary({
-        score,
-        studentLevel,
-        persistentIssues,
-        recentPerformance,
-        qualityScores,
-        analysis,
-      }),
+      analysis
+    );
+
+    // ✅ Generate vocabulary enhancements
+    const vocabularyEnhancements = await this.suggestVocabularyEnhancements(
+      text,
+      studentLevel,
+      analysis
+    );
+
+    // ✅ Analyze sentence structure
+    const sentenceStructure = this.analyzeSentenceStructure(
+      analysis,
+      studentLevel
+    );
+
+    // ✅ Generate content feedback
+    const contentFeedback = this.generateContentFeedback(
+      analysis,
+      qualityScores.content,
+      studentLevel
+    );
+
+    // ✅ Generate organization feedback
+    const organizationFeedback = this.generateOrganizationFeedback(
+      analysis,
+      qualityScores.organization,
+      studentLevel,
+      essayStructure
+    );
+
+    // ✅ Generate personalized summary
+    const summary = this.generatePersonalizedSummary({
+      score,
+      studentLevel,
+      persistentIssues,
+      recentPerformance,
+      qualityScores,
+      analysis,
+      grammarErrors,
+      spellingErrors,
+      styleSuggestions,
+    });
+
+    // ✅ Generate assessment summary
+    const assessmentSummary = this.generateAssessmentSummary(
+      grammarErrors,
+      spellingErrors,
+      styleSuggestions,
+      qualityScores,
+      studentLevel
+    );
+
+    // ✅ Generate next step recommendations
+    const nextStepRecommendations = this.generateNextStepRecommendations(
+      grammarErrors,
+      spellingErrors,
+      qualityScores,
+      studentLevel,
+      analysis
+    );
+
+    // ✅ Generate motivational message
+    const motivationalMessage = this.generateMotivationalMessage(
+      score,
+      studentLevel,
+      recentPerformance
+    );
+
+    const structureInfo = this.generateStructureInfo(essayStructure, analysis);
+
+    // ✅ Compile complete feedback object
+    const feedback = {
+      // Core feedback data
+      studentLevel,
+
+      // Grammar feedback
+      grammarErrors,
+      grammarFeedbackMessage,
+
+      // Spelling feedback
+      spellingErrors,
+      spellingFeedbackMessage,
+
+      // Style feedback
+      styleSuggestions,
+      styleFeedbackMessage,
+
+      // Enhanced feedback
+      vocabularyEnhancements,
+      sentenceStructure,
+      positiveFeedback,
+      beforeAfterExamples,
+
+      // Content & Organization
+      contentFeedback,
+      organizationFeedback,
+
+      // Structure analysis
+      structureInfo,
+
+      // Assessment summary
+      assessmentSummary,
+
+      // Summary and guidance
+      summary,
+      nextStepRecommendations,
+      motivationalMessage,
+
+      // Metadata
+      analysisMetadata: {
+        wordsAnalyzed: analysis.wordCount,
+        sentencesAnalyzed: analysis.sentenceCount,
+        paragraphsAnalyzed: analysis.paragraphCount,
+        vocabularyDiversity: Math.round(analysis.vocabularyDiversity * 100),
+        avgSentenceLength: Math.round(analysis.avgSentenceLength),
+      },
     };
 
+    console.log("✅ Feedback generation complete");
     return feedback;
   }
 
-  analyzeEssay(text) {
-    const doc = compromise(text);
-    const sentences = text.split(/[.!?]+/).filter((s) => s.trim());
-    const paragraphs = text.split(/\n\n+/).filter((p) => p.trim());
-    const words = text.match(/\b\w+\b/g) || [];
-
+  /**
+ * ✅ NEW: Generate structure information for feedback
+ */
+generateStructureInfo(essayStructure, analysis) {
+  if (!essayStructure || !essayStructure.paragraphs || essayStructure.paragraphs.length === 0) {
     return {
-      sentences,
-      paragraphs,
-      words,
-      wordCount: words.length,
-      sentenceCount: sentences.length,
-      paragraphCount: paragraphs.length,
-      nouns: doc.nouns().out("array"),
-      verbs: doc.verbs().out("array"),
-      adjectives: doc.adjectives().out("array"),
-      adverbs: doc.adverbs().out("array"),
-      hasIntroduction: this.hasIntroduction(paragraphs),
-      hasConclusion: this.hasConclusion(paragraphs),
-      hasThesis: this.hasThesis(text),
-      transitions: this.findTransitions(sentences),
-      avgSentenceLength: words.length / sentences.length,
-      vocabularyDiversity:
-        new Set(words.map((w) => w.toLowerCase())).size / words.length,
-      passiveVoiceCount: this.countPassiveVoice(sentences),
-      complexSentences: this.identifyComplexSentences(sentences),
+      hasStructure: false,
+      message: "No clear structure detected",
     };
   }
 
-  async detectGrammarErrors(text, studentLevel) {
-    console.log("🔍 Starting grammar analysis...");
+  return {
+    hasStructure: true,
+    title: essayStructure.title || null,
+    sectionCount: essayStructure.sections.length,
+    sections: essayStructure.sections,
+    paragraphCount: essayStructure.paragraphs.length,
+    message: `Essay has clear structure with ${essayStructure.sections.length} sections and ${essayStructure.paragraphs.length} paragraphs`,
+    sectionsDetected: essayStructure.sections.map((section, index) => ({
+      order: index + 1,
+      title: section,
+      paragraphsInSection: essayStructure.paragraphs.filter((p) => p.section === section).length,
+    })),
+  };
+}
 
-    // Use simple sentence splitting - the most reliable approach
-    const sentences = text.split(/[.!?]+/).filter((s) => s.trim());
-    const errors = [];
+  // ==================== FEEDBACK MESSAGE GENERATORS ====================
 
-    console.log(`📝 Found ${sentences.length} sentences to analyze`);
+  /**
+   * ✅ Generate grammar feedback message based on student level
+   */
+  generateGrammarFeedbackMessage(grammarErrors, studentLevel) {
+    const errorCount = grammarErrors.length;
 
-    for (let idx = 0; idx < sentences.length; idx++) {
-      const sentence = sentences[idx].trim();
-      if (!sentence || sentence.length < 10) continue;
-
-      // Use ONLY the new, simplified grammar checking
-      const sentenceErrors = this.checkForRealGrammarErrors(sentence);
-
-      // Add sentence number to errors
-      sentenceErrors.forEach((error) => {
-        errors.push({
-          ...error,
-          sentenceNumber: idx + 1,
-          explanation: this.getGrammarExplanation(error.type, studentLevel),
-          severity: error.severity || "moderate",
-        });
-      });
-
-      // Check for run-on sentences (only obvious cases)
-      if (this.isRunOnSentence(sentence)) {
-        errors.push({
-          sentence: sentence,
-          sentenceNumber: idx + 1,
-          type: "run_on_sentence",
-          error: "Long sentence that might be hard to read",
-          correction:
-            "Consider breaking this into shorter sentences for clarity",
-          explanation: this.getGrammarExplanation("run_on", studentLevel),
-          severity: "minor",
-        });
-      }
+    if (errorCount === 0) {
+      return this.generateNoErrorFeedback("grammar", studentLevel);
     }
 
-    console.log(`✅ Found ${errors.length} grammar errors`);
-    return errors.slice(0, 10); // Limit to most important errors
+    const messages = {
+      beginner: {
+        few: "Great effort! You have a few grammar mistakes to fix. Let's work on them together!",
+        some: "You're making good progress! Let's focus on these grammar areas to improve your writing.",
+        many: "Don't worry! Grammar takes practice. Let's look at these common mistakes and learn how to fix them.",
+      },
+      intermediate: {
+        few: "Good work! You have some minor grammar issues to polish.",
+        some: "Solid writing! Focus on these grammar improvements to make your essay even stronger.",
+        many: "Pay attention to these grammar patterns. Improving them will significantly enhance your writing quality.",
+      },
+      advanced: {
+        few: "Strong grammatical control with minor refinements needed.",
+        some: "Good grammatical accuracy with some areas for improvement.",
+        many: "Several grammatical issues detected. Review the highlighted corrections for academic precision.",
+      },
+    };
+
+    const levelMessages = messages[studentLevel] || messages.intermediate;
+
+    if (errorCount <= 3) return levelMessages.few;
+    if (errorCount <= 8) return levelMessages.some;
+    return levelMessages.many;
   }
 
   /**
-   * Analyze a single sentence for grammar errors
+   * ✅ Generate spelling feedback message based on student level
    */
-  async analyzeSingleSentence(sentence, sentenceNumber, studentLevel) {
-    const errors = [];
+  generateSpellingFeedbackMessage(spellingErrors, studentLevel) {
+    const errorCount = spellingErrors.length;
 
-    // 1. Check for actual common errors (not false positives)
-    const realErrors = this.checkForRealGrammarErrors(sentence);
-    errors.push(...realErrors);
-
-    // 2. Check sentence structure
-    if (this.isRunOnSentence(sentence)) {
-      errors.push({
-        sentence: sentence,
-        sentenceNumber: sentenceNumber,
-        type: "run_on_sentence",
-        error: "Long sentence that might be hard to read",
-        correction: "Consider breaking this into shorter sentences for clarity",
-        explanation: this.getGrammarExplanation("run_on", studentLevel),
-        severity: "minor",
-      });
+    if (errorCount === 0) {
+      return this.generateNoErrorFeedback("spelling", studentLevel);
     }
 
-    // 3. Check for fragments (only if it's actually a fragment)
-    if (this.isRealFragment(sentence)) {
-      errors.push({
-        sentence: sentence,
-        sentenceNumber: sentenceNumber,
-        type: "sentence_fragment",
-        error: "Incomplete thought",
-        correction: "Add a subject and verb to complete the sentence",
-        explanation: this.getGrammarExplanation("fragments", studentLevel),
-        severity: "moderate",
-      });
-    }
+    const messages = {
+      beginner: {
+        few: "Nice job! Just a few spelling mistakes to correct.",
+        some: "Good spelling overall! Let's fix these common spelling errors.",
+        many: "Spelling practice will help! Pay attention to these words and their correct spellings.",
+      },
+      intermediate: {
+        few: "Good spelling accuracy with minor corrections needed.",
+        some: "Watch out for these spelling patterns. Using spell check can help catch these.",
+        many: "Several spelling errors detected. Consider using a spell checker while writing.",
+      },
+      advanced: {
+        few: "Minor spelling refinements needed for professional accuracy.",
+        some: "Some spelling inconsistencies detected. Review for academic precision.",
+        many: "Multiple spelling errors affecting writing quality. Focus on proofreading.",
+      },
+    };
 
-    // Add sentence number to all errors
-    errors.forEach((error) => {
-      error.sentenceNumber = sentenceNumber;
-    });
+    const levelMessages = messages[studentLevel] || messages.intermediate;
 
-    return errors;
+    if (errorCount <= 2) return levelMessages.few;
+    if (errorCount <= 5) return levelMessages.some;
+    return levelMessages.many;
   }
 
   /**
-   * Check for ONLY obvious, real grammar errors
+   * ✅ Generate style feedback message
    */
-  checkForRealGrammarErrors(sentence) {
-    const errors = [];
+  generateStyleFeedback(styleSuggestions, studentLevel) {
+    if (styleSuggestions.length === 0) return null;
 
-    // ONLY check for clear, unambiguous errors
-    const obviousErrors = [
-      // Subject-verb agreement (clear cases only)
-      {
-        pattern: /\b(he|she|it)\s+(go|do|have)\b/gi,
-        correction: (match) => {
-          const verb = match.split(/\s+/)[1];
-          const corrections = { go: "goes", do: "does", have: "has" };
-          return match.replace(verb, corrections[verb.toLowerCase()] || verb);
-        },
-        reason: "subject-verb agreement",
-        type: "subject_verb_agreement",
-      },
-      {
-        pattern: /\b(I|you|we|they)\s+(goes|does|has)\b/gi,
-        correction: (match) => {
-          const verb = match.split(/\s+/)[1];
-          const corrections = { goes: "go", does: "do", has: "have" };
-          return match.replace(verb, corrections[verb.toLowerCase()] || verb);
-        },
-        reason: "subject-verb agreement",
-        type: "subject_verb_agreement",
-      },
+    const messages = {
+      beginner:
+        "Great ideas! A few small changes can make your writing even clearer.",
+      intermediate:
+        "Good writing! Some style adjustments could make your essay more effective.",
+      advanced:
+        "Strong writing! Minor stylistic refinements could enhance academic tone.",
+    };
 
-      // Common pronoun errors (only clear cases)
-      {
-        pattern: /\btheir\s+(is|are|was|were)\b/gi,
-        correction: (match) => match.replace("their", "there"),
-        reason: "their vs there confusion",
-        type: "pronoun_confusion",
-      },
-      {
-        pattern: /\bthere\s+(house|car|book|idea)\b/gi,
-        correction: (match) => match.replace("there", "their"),
-        reason: "there vs their confusion",
-        type: "pronoun_confusion",
-      },
-
-      // Common verb tense errors (only with clear time indicators)
-      {
-        pattern: /\byesterday\s+(go|see|take)\b/gi,
-        correction: (match) => {
-          const verb = match.split(/\s+/)[1];
-          const pastTense = { go: "went", see: "saw", take: "took" };
-          return match.replace(verb, pastTense[verb.toLowerCase()] || verb);
-        },
-        reason: "verb tense consistency",
-        type: "verb_tense",
-      },
-      {
-        pattern: /\btomorrow\s+(went|saw|took)\b/gi,
-        correction: (match) => {
-          const verb = match.split(/\s+/)[1];
-          const presentTense = { went: "go", saw: "see", took: "take" };
-          return match.replace(verb, presentTense[verb.toLowerCase()] || verb);
-        },
-        reason: "verb tense consistency",
-        type: "verb_tense",
-      },
-    ];
-
-    obviousErrors.forEach(({ pattern, correction, reason, type }) => {
-      const matches = sentence.match(pattern);
-      if (matches) {
-        matches.forEach((match) => {
-          errors.push({
-            sentence: sentence,
-            error: reason,
-            original: match,
-            correction: correction(match),
-            type: type,
-            severity: "moderate",
-          });
-        });
-      }
-    });
-
-    return errors;
+    return messages[studentLevel] || messages.intermediate;
   }
 
   /**
-   * PROPER sentence splitting that actually works
+   * ✅ Generate no error feedback (when student has no errors)
    */
-  splitIntoSentencesProperly(text) {
-    // Clean the text first
-    text = text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+  generateNoErrorFeedback(category, studentLevel) {
+    const messages = {
+      grammar: {
+        beginner:
+          "🎉 Excellent! No grammar errors detected. You're building strong writing skills!",
+        intermediate:
+          "✅ Great grammar! Your sentences are well-constructed and accurate.",
+        advanced:
+          "Outstanding grammatical accuracy! Professional-level writing demonstrated.",
+      },
+      spelling: {
+        beginner:
+          "🎉 Perfect spelling! All words are spelled correctly. Great attention to detail!",
+        intermediate:
+          "✅ Excellent spelling accuracy! No errors detected in your writing.",
+        advanced:
+          "Flawless spelling throughout your essay. Impressive attention to detail.",
+      },
+    };
 
-    // Split on sentence endings but be smart about it
-    const sentences = [];
-    let currentSentence = "";
-    let inQuotes = false;
-
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      currentSentence += char;
-
-      // Track quotes
-      if (char === '"' || char === "'") {
-        inQuotes = !inQuotes;
-      }
-
-      // Sentence endings: . ! ? but not in quotes or abbreviations
-      if ((char === "." || char === "!" || char === "?") && !inQuotes) {
-        // Check if it's likely a real sentence end
-        const nextChar = i < text.length - 1 ? text[i + 1] : "";
-        const isEndOfSentence =
-          nextChar === " " &&
-          currentSentence.length > 15 && // Reasonable sentence length
-          !this.isAbbreviation(currentSentence.trim());
-
-        if (isEndOfSentence || i === text.length - 1) {
-          const cleanSentence = currentSentence.trim();
-          if (
-            cleanSentence.length > 10 &&
-            !cleanSentence.match(/^(section|chapter|figure|\d+\.)/i)
-          ) {
-            sentences.push(cleanSentence);
-          }
-          currentSentence = "";
-        }
-      }
-    }
-
-    // Add any remaining text
-    if (currentSentence.trim().length > 10) {
-      sentences.push(currentSentence.trim());
-    }
-
-    return sentences;
+    return (
+      messages[category]?.[studentLevel] ||
+      messages[category]?.intermediate ||
+      "No errors detected!"
+    );
   }
 
-  isAbbreviation(sentence) {
-    const abbreviations = [
-      "mr",
-      "mrs",
-      "dr",
-      "prof",
-      "inc",
-      "ltd",
-      "etc",
-      "eg",
-      "ie",
-    ];
-    const words = sentence.toLowerCase().split(" ");
-    const lastWord = words[words.length - 1]?.replace(/[.,!?]/g, "");
-    return abbreviations.includes(lastWord);
-  }
+  // ==================== ASSESSMENT SUMMARY ====================
 
-  getSpellingSeverity(word, suggestions) {
-    // If no close suggestions, it's more severe
-    if (!suggestions || suggestions.length === 0) return "severe";
-
-    // Check Levenshtein distance
-    const distance = natural.LevenshteinDistance(
-      word.toLowerCase(),
-      suggestions[0].toLowerCase()
+  /**
+   * ✅ Generate comprehensive assessment summary
+   */
+  generateAssessmentSummary(
+    grammarErrors,
+    spellingErrors,
+    styleSuggestions,
+    qualityScores,
+    studentLevel
+  ) {
+    const overallComment = this.generateOverallComment(
+      qualityScores,
+      studentLevel
+    );
+    const strengths = this.identifyStrengths(
+      qualityScores,
+      grammarErrors,
+      spellingErrors
+    );
+    const weaknesses = this.identifyWeaknesses(
+      qualityScores,
+      grammarErrors,
+      spellingErrors,
+      styleSuggestions
+    );
+    const improvementFocus = this.generateImprovementFocus(
+      weaknesses,
+      studentLevel
     );
 
-    if (distance === 1) return "minor"; // typo
-    if (distance === 2) return "moderate";
-    return "severe"; // completely different word
+    return {
+      overallComment,
+      strengths,
+      weaknesses,
+      improvementFocus,
+    };
   }
 
-  /**
-   * Proper sentence splitting that handles academic writing
-   */
-  splitIntoSentences(text) {
-    // Remove extra whitespace and normalize
-    text = text.replace(/\s+/g, " ").trim();
+  generateOverallComment(qualityScores, studentLevel) {
+    const avgQuality =
+      (qualityScores.grammar +
+        qualityScores.content +
+        qualityScores.organization +
+        qualityScores.style +
+        qualityScores.mechanics) /
+      5;
 
-    // Split on sentence endings but handle abbreviations, titles, etc.
-    const sentenceRegex = /[^.!?]*[.!?]\s+/g;
-    let matches = text.match(sentenceRegex);
-
-    if (!matches) {
-      // Fallback: split on periods, exclamation, question marks
-      return text
-        .split(/[.!?]+/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 10);
-    }
-
-    // Clean up the sentences
-    return matches
-      .map((sentence) => sentence.trim())
-      .filter((sentence) => {
-        // Filter out very short fragments and section headers
-        return (
-          sentence.length > 15 &&
-          !sentence.match(/^(section|chapter|figure|table)\s+\d+/i) &&
-          !sentence.match(/^\d+\.\s*$/)
-        );
-      });
-  }
-
-  /**
-   * Improved spelling detection - fix common word issues
-   */
-  async detectSpellingErrors(text, studentLevel) {
-    if (!this.dictionaryReady) {
-      return [];
-    }
-
-    const words = text.match(/\b[a-zA-Z']+\b/g) || [];
-    const errors = [];
-    const seen = new Set();
-
-    // Common words that should NEVER be flagged or corrected incorrectly
-    const alwaysCorrectWords = new Set([
-      "apps",
-      "social",
-      "media",
-      "online",
-      "website",
-      "internet",
-      "email",
-      "digital",
-      "mobile",
-      "computer",
-      "software",
-      "hardware",
-      "database",
-      "network",
-      "algorithm",
-    ]);
-
-    // Words that often get bad suggestions
-    const badSuggestionsMap = {
-      apps: ["apps", "applications", "software"],
-      chatbots: ["chatbots", "chat bots", "AI assistants"],
-      dysmorphia: ["dysmorphia", "body dysmorphia"],
+    const comments = {
+      beginner: {
+        excellent:
+          "🎉 Amazing work! You're learning quickly and showing great progress!",
+        good: "👍 Good job! You're making great progress with your writing!",
+        needsWork:
+          "💪 Great effort! Writing takes practice - you'll get better!",
+      },
+      intermediate: {
+        excellent: "🌟 Excellent essay! Strong writing skills demonstrated.",
+        good: "📚 Solid work! Continue practicing to improve further.",
+        needsWork: "📝 Good attempt! Focus on the feedback to improve.",
+      },
+      advanced: {
+        excellent: "💫 Outstanding work! Professional-level writing quality.",
+        good: "✅ Good essay with clear potential for refinement.",
+        needsWork:
+          "🔍 The essay shows potential but needs refinement in key areas.",
+      },
     };
 
-    for (const word of words) {
-      const lower = word.toLowerCase();
+    const level = comments[studentLevel] || comments.intermediate;
 
-      // Skip if already checked, too short, or proper noun
-      if (seen.has(lower) || word.length <= 3) continue;
-      seen.add(lower);
+    if (avgQuality >= 0.8) return level.excellent;
+    if (avgQuality >= 0.65) return level.good;
+    return level.needsWork;
+  }
 
-      // Skip proper nouns (capitalized words)
-      if (/^[A-Z]/.test(word) && word.length > 3) continue;
+  identifyStrengths(qualityScores, grammarErrors, spellingErrors) {
+    const strengths = [];
 
-      // Skip always-correct words
-      if (alwaysCorrectWords.has(lower)) continue;
+    if (qualityScores.content >= 0.75) {
+      strengths.push("Strong content with well-developed ideas and arguments");
+    }
 
-      // Check spelling
-      const isMisspelled = !this.dictionary.spellCheck(word);
+    if (qualityScores.organization >= 0.75) {
+      strengths.push("Good essay structure with clear organization");
+    }
 
-      if (isMisspelled) {
-        let suggestions = this.dictionary.getSuggestions(word, 3);
+    if (grammarErrors.length === 0) {
+      strengths.push("Excellent grammar accuracy throughout the essay");
+    } else if (grammarErrors.length <= 3) {
+      strengths.push("Good grammatical control with minimal errors");
+    }
 
-        // Use custom suggestions for problematic words
-        if (badSuggestionsMap[lower]) {
-          suggestions = badSuggestionsMap[lower];
-        }
+    if (spellingErrors.length === 0) {
+      strengths.push("Perfect spelling with no errors detected");
+    }
 
-        // Only flag if we have good suggestions
-        if (suggestions.length > 0 && suggestions[0] !== word) {
-          // Additional filter: don't suggest completely different words
-          const distance = natural.LevenshteinDistance(
-            word.toLowerCase(),
-            suggestions[0].toLowerCase()
+    if (qualityScores.style >= 0.7) {
+      strengths.push("Appropriate writing style and tone for the essay type");
+    }
+
+    // Ensure at least one strength
+    if (strengths.length === 0) {
+      strengths.push("Shows effort and engagement with the writing task");
+    }
+
+    return strengths;
+  }
+
+  identifyWeaknesses(
+    qualityScores,
+    grammarErrors,
+    spellingErrors,
+    styleSuggestions
+  ) {
+    const weaknesses = [];
+
+    if (qualityScores.grammar < 0.65) {
+      weaknesses.push(
+        `Grammar accuracy needs improvement (${grammarErrors.length} errors detected)`
+      );
+    }
+
+    if (qualityScores.content < 0.6) {
+      weaknesses.push(
+        "Content development could be stronger with more detailed examples"
+      );
+    }
+
+    if (qualityScores.organization < 0.6) {
+      weaknesses.push(
+        "Essay organization needs improvement for better clarity"
+      );
+    }
+
+    if (spellingErrors.length > 5) {
+      weaknesses.push(
+        `Multiple spelling errors (${spellingErrors.length} found) affect readability`
+      );
+    }
+
+    if (styleSuggestions.length > 5) {
+      weaknesses.push(
+        "Informal language and vague expressions reduce academic tone"
+      );
+    }
+
+    return weaknesses;
+  }
+
+  generateImprovementFocus(weaknesses, studentLevel) {
+    if (weaknesses.length === 0) {
+      return "Continue practicing to maintain your strong writing skills!";
+    }
+
+    const priorities = {
+      beginner:
+        "Focus on grammar basics and spelling accuracy in your next essay.",
+      intermediate:
+        "Work on refining grammar and strengthening your arguments with specific examples.",
+      advanced:
+        "Polish your grammar for academic precision and enhance vocabulary variety.",
+    };
+
+    return priorities[studentLevel] || priorities.intermediate;
+  }
+
+  // ==================== BEFORE/AFTER EXAMPLES ====================
+
+  /**
+   * ✅ Generate before/after examples with level-appropriate explanations
+   */
+  async generateBeforeAfterExamples(
+    text,
+    grammarErrors,
+    spellingErrors,
+    styleSuggestions,
+    studentLevel
+  ) {
+    const examples = [];
+    const sentences = text.split(/[.!?]+/).filter((s) => s.trim());
+    const usedExamples = new Set();
+
+    console.log("🎯 Generating leveled before/after examples...");
+
+    // 1. Grammar Examples (Top 2)
+    if (grammarErrors.length > 0) {
+      const grammarExamples = grammarErrors
+        .filter(
+          (error) => error.confidence > 0.7 && !usedExamples.has(error.original)
+        )
+        .slice(0, 2);
+
+      for (const error of grammarExamples) {
+        usedExamples.add(error.original);
+
+        examples.push({
+          type: "grammar",
+          issue: this.getGrammarIssueDescription(error, studentLevel),
+          before: error.original,
+          after: error.correction,
+          explanation:
+            error.explanation ||
+            this.getFallbackExplanation(error, studentLevel),
+          severity: error.severity || "moderate",
+          word_changed: {
+            from: error.issueWord || this.extractMainWord(error.original),
+            to: this.extractMainWord(error.correction),
+          },
+        });
+      }
+    }
+
+    // 2. Spelling Examples (Top 2)
+    if (spellingErrors.length > 0 && examples.length < 4) {
+      const spellingExamples = spellingErrors
+        .filter(
+          (error) => error.severity !== "minor" && !usedExamples.has(error.word)
+        )
+        .slice(0, 2);
+
+      for (const error of spellingExamples) {
+        usedExamples.add(error.word);
+
+        const sentenceWithError = this.findSentenceContaining(
+          sentences,
+          error.word
+        );
+        if (sentenceWithError) {
+          const correctedSentence = sentenceWithError.replace(
+            new RegExp(`\\b${this.escapeRegex(error.word)}\\b`, "gi"),
+            error.correction
           );
 
-          if (distance <= 2) {
-            // Only suggest close matches
-            errors.push({
-              word: word,
-              correction: suggestions[0],
-              suggestions: suggestions.slice(0, 2),
-              context: this.getWordContext(text, word),
-              position: this.findWordPosition(text, word),
-              severity: this.getSpellingSeverity(word, suggestions),
-            });
-          }
+          examples.push({
+            type: "spelling",
+            issue: `Spelling: "${error.word}" → "${error.correction}"`,
+            before: sentenceWithError,
+            after: correctedSentence,
+            explanation: this.getSpellingExplanation(error, studentLevel),
+            severity: error.severity,
+            word_changed: {
+              from: error.word,
+              to: error.correction,
+            },
+          });
         }
       }
-
-      // Limit to avoid overwhelming feedback
-      if (errors.length >= 10) break;
     }
 
-    return errors;
+    // 3. Style Examples (Top 1)
+    if (styleSuggestions.length > 0 && examples.length < 5) {
+      const styleExample = styleSuggestions[0];
+      const sentenceWithIssue = this.findSentenceContaining(
+        sentences,
+        styleExample.text
+      );
+
+      if (sentenceWithIssue && !usedExamples.has(sentenceWithIssue)) {
+        const improved = this.improveStyleSentence(
+          sentenceWithIssue,
+          styleExample
+        );
+
+        if (improved !== sentenceWithIssue) {
+          examples.push({
+            type: "style",
+            issue: `Style: ${styleExample.type.replace(/_/g, " ")}`,
+            before: sentenceWithIssue,
+            after: improved,
+            explanation: styleExample.explanation,
+            severity: "suggestion",
+            isSuggestion: true,
+          });
+        }
+      }
+    }
+
+    console.log(
+      `✅ Generated ${examples.length} leveled before/after examples`
+    );
+    return examples.slice(0, 5);
   }
 
-  getGrammarExplanation(errorType, level) {
-    const explanations = {
+  getGrammarIssueDescription(error, studentLevel) {
+    const descriptions = {
       subject_verb_agreement: {
-        beginner:
-          "The subject and verb must match. With 'he/she/it', add 's' to the verb. Example: 'He goes' not 'He go'.",
-        intermediate:
-          "Ensure subject-verb agreement: singular subjects need singular verbs ending with 's'.",
-        advanced:
-          "Maintain proper subject-verb agreement throughout your writing, particularly with third-person singular subjects.",
-      },
-      pronoun_confusion: {
-        beginner:
-          "Use 'their' for belonging to someone, 'there' for a place, 'they're' for 'they are'.",
-        intermediate:
-          "Distinguish between possessive 'their', location 'there', and contraction 'they're'.",
-        advanced:
-          "Ensure correct usage of homophones: their/there/they're, its/it's, your/you're.",
+        beginner: "Subject-verb agreement",
+        intermediate: "Subject-verb agreement error",
+        advanced: "Subject-verb agreement inconsistency",
       },
       verb_tense: {
-        beginner:
-          "Keep verb tenses consistent with time words like 'yesterday' or 'tomorrow'.",
-        intermediate:
-          "Maintain consistent verb tense with temporal indicators throughout your writing.",
-        advanced:
-          "Ensure temporal consistency in verb usage unless intentionally shifting timeframes.",
+        beginner: "Verb tense",
+        intermediate: "Verb tense error",
+        advanced: "Verb tense inconsistency",
       },
-      run_on_sentence: {
-        beginner:
-          "This sentence is quite long. Try breaking it into shorter sentences for better clarity.",
-        intermediate:
-          "Consider dividing long sentences or using appropriate punctuation for better readability.",
-        advanced:
-          "While long sentences can be effective stylistically, they may benefit from restructuring for academic writing.",
+      pronoun_confusion: {
+        beginner: "Word confusion",
+        intermediate: "Pronoun usage error",
+        advanced: "Pronoun reference issue",
       },
+      article_usage: {
+        beginner: "Missing word",
+        intermediate: "Article usage error",
+        advanced: "Article usage inconsistency",
+      },
+    };
+
+    const typeDesc = descriptions[error.type] || {
+      beginner: "Grammar improvement",
+      intermediate: "Grammar error",
+      advanced: "Grammatical issue",
+    };
+
+    return typeDesc[studentLevel] || typeDesc.intermediate;
+  }
+
+  getSpellingExplanation(error, studentLevel) {
+    const commonWords = {
+      peoples: {
+        beginner:
+          "Use 'people' for more than one person. Use 'people's' to show something belongs to people.",
+        intermediate:
+          "'Peoples' is incorrect. Use 'people' for plural or 'people's' for possessive.",
+        advanced:
+          "The correct form is 'people' (plural) or 'people's' (possessive).",
+      },
+      alot: {
+        beginner: "Write 'a lot' as two separate words.",
+        intermediate: "'A lot' should be written as two words: 'a lot'.",
+        advanced: "The correct spelling is 'a lot' (two words).",
+      },
+      their: {
+        beginner:
+          "Use 'their' for something that belongs to people. Use 'there' for a place.",
+        intermediate:
+          "Remember: 'their' shows ownership, 'there' indicates location.",
+        advanced:
+          "Distinguish between possessive 'their' and locative 'there'.",
+      },
+    };
+
+    const wordExplanation = commonWords[error.word.toLowerCase()];
+    if (wordExplanation) {
+      return wordExplanation[studentLevel] || wordExplanation.intermediate;
+    }
+
+    const generalExplanations = {
+      beginner: `"${error.word}" is spelled "${error.correction}". This is a common spelling word.`,
+      intermediate: `The correct spelling is "${error.correction}", not "${error.word}".`,
+      advanced: `Spelling correction: "${error.word}" → "${error.correction}"`,
     };
 
     return (
-      explanations[errorType]?.[level] ||
-      "Consider revising for better clarity and readability."
+      generalExplanations[studentLevel] || generalExplanations.intermediate
     );
   }
 
-  /**
-   * Rule-based grammar error detection (existing code)
-   */
-  async detectRuleBasedGrammarErrors(sentence, sentenceNumber, studentLevel) {
-    const errors = [];
+  getFallbackExplanation(error, studentLevel) {
+    const explanations = {
+      beginner: `**What's Wrong:** ${error.reason || "This needs correction"}
 
-    // 1. Subject-verb agreement
-    const svErrors = this.checkSubjectVerbAgreement(sentence);
-    svErrors.forEach((error) =>
-      errors.push({
-        ...error,
-        sentenceNumber: sentenceNumber + 1,
-        type: "subject_verb_agreement",
-        explanation: this.getGrammarExplanation("subject_verb", studentLevel),
-        severity: "moderate",
-      })
-    );
+**The Rule:** This is a common grammar rule that helps make your writing clearer.
 
-    // 2. Article errors (a/an/the)
-    const articleErrors = this.checkArticles(sentence);
-    articleErrors.forEach((error) =>
-      errors.push({
-        ...error,
-        sentenceNumber: sentenceNumber + 1,
-        type: "article_usage",
-        explanation: this.getGrammarExplanation("articles", studentLevel),
-        severity: "minor",
-      })
-    );
+**In Your Essay:**
+❌ "${error.original}"
+✅ "${error.correction}"
 
-    // 3. Pronoun errors
-    const pronounErrors = this.checkPronouns(sentence);
-    pronounErrors.forEach((error) =>
-      errors.push({
-        ...error,
-        sentenceNumber: sentenceNumber + 1,
-        type: "pronoun_confusion",
-        explanation: this.getGrammarExplanation("pronouns", studentLevel),
-        severity: "moderate",
-      })
-    );
+**Memory Tip:** Practice this correction in your next essay!`,
 
-    // 4. Verb tense consistency
-    const tenseErrors = this.checkVerbTense(sentence);
-    tenseErrors.forEach((error) =>
-      errors.push({
-        ...error,
-        sentenceNumber: sentenceNumber + 1,
-        type: "verb_tense",
-        explanation: this.getGrammarExplanation("tense", studentLevel),
-        severity: "moderate",
-      })
-    );
+      intermediate: `**Issue:** ${error.reason || "Grammar improvement needed"}
 
-    // 5. Fragment sentences
-    if (this.isFragment(sentence)) {
-      errors.push({
-        sentence,
-        sentenceNumber: sentenceNumber + 1,
-        type: "sentence_fragment",
-        error: "Incomplete sentence (fragment)",
-        correction: "Add a subject and verb to make a complete sentence",
-        explanation: this.getGrammarExplanation("fragments", studentLevel),
-        severity: "severe",
-      });
-    }
+**Correction:**
+❌ "${error.original}"
+✅ "${error.correction}"
 
-    // 6. Run-on sentences
-    if (this.isRunOn(sentence)) {
-      errors.push({
-        sentence,
-        sentenceNumber: sentenceNumber + 1,
-        type: "run_on_sentence",
-        error: "Run-on sentence detected",
-        correction:
-          "Break this into multiple sentences or use proper punctuation",
-        explanation: this.getGrammarExplanation("run_on", studentLevel),
-        severity: "moderate",
-      });
-    }
+**Rule:** ${error.type ? error.type.replace(/_/g, " ") : "Grammar rule"}`,
 
-    return errors;
-  }
+      advanced: `**Issue:** ${error.reason || "Grammatical correction needed"}
 
-  checkSubjectVerbAgreement(sentence) {
-    const errors = [];
-
-    // Enhanced patterns
-    const patterns = [
-      {
-        regex:
-          /\b(he|she|it)\s+(go|do|have|say|help|write|need|want|make|take|give|come)\b/gi,
-        fix: (match) => {
-          const parts = match.split(/\s+/);
-          return `${parts[0]} ${parts[1]}s`;
-        },
-        message: "Third person singular needs -s ending",
-      },
-      {
-        regex: /\b(he|she|it)\s+don't\b/gi,
-        fix: (match) => match.replace("don't", "doesn't"),
-        message: 'Use "doesn\'t" with he/she/it',
-      },
-      {
-        regex: /\b(I|you|we|they)\s+doesn't\b/gi,
-        fix: (match) => match.replace("doesn't", "don't"),
-        message: 'Use "don\'t" with I/you/we/they',
-      },
-      {
-        regex: /\b(he|she|it)\s+are\b/gi,
-        fix: (match) => match.replace("are", "is"),
-        message: 'Use "is" with he/she/it',
-      },
-      {
-        regex: /\b(I|you|we|they)\s+is\b/gi,
-        fix: (match) => match.replace("is", "are"),
-        message: 'Use "are" with you/we/they, or "am" with I',
-      },
-    ];
-
-    patterns.forEach(({ regex, fix, message }) => {
-      const matches = sentence.match(regex);
-      if (matches) {
-        matches.forEach((match) => {
-          errors.push({
-            sentence,
-            error: message,
-            original: match,
-            correction: fix(match),
-            rule: "subject_verb_agreement",
-          });
-        });
-      }
-    });
-
-    return errors;
-  }
-
-  checkArticles(sentence) {
-    const errors = [];
-
-    // FIXED: Better pattern that avoids suggesting articles for verbs
-    const pattern =
-      /\b(have|has|need|needs|want|wants|buy|bought|see|saw|find|found|use|uses|get|got)\s+([a-z]+)\b/gi;
-    const matches = [...sentence.matchAll(pattern)];
-
-    // Common uncountable/mass nouns that don't need articles
-    const uncountable = new Set([
-      "water",
-      "time",
-      "money",
-      "information",
-      "advice",
-      "research",
-      "evidence",
-      "furniture",
-      "equipment",
-      "homework",
-      "knowledge",
-      "news",
-      "progress",
-      "traffic",
-      "travel",
-      "work",
-      "access",
-      "food",
-      "music",
-      "art",
-      "literature",
-      "software",
-      "data",
-    ]);
-
-    // Words that should NEVER have articles before them
-    const neverArticle = new Set([
-      "become",
-      "to",
-      "that",
-      "which",
-      "who",
-      "whom",
-      "whose",
-      "and",
-      "or",
-      "but",
-      "so",
-      "because",
-      "since",
-      "although",
-      "if",
-      "when",
-      "where",
-      "why",
-      "how",
-      "what",
-    ]);
-
-    for (const match of matches) {
-      const noun = match[2].toLowerCase();
-
-      // Skip if uncountable, plural, or should never have article
-      if (uncountable.has(noun) || neverArticle.has(noun)) continue;
-      if (noun.endsWith("s") && !noun.endsWith("ss")) continue; // Plurals
-
-      // Check if article already present nearby
-      const contextBefore = sentence.substring(
-        Math.max(0, match.index - 20),
-        match.index
-      );
-      if (
-        /\b(a|an|the|my|your|his|her|its|our|their|some|any|this|that|these|those)\b/i.test(
-          contextBefore
-        )
-      ) {
-        continue;
-      }
-
-      // Only suggest article for actual countable nouns
-      const article = /^[aeiou]/i.test(noun) ? "an" : "a";
-      errors.push({
-        sentence,
-        error: `Consider adding an article before "${noun}"`,
-        original: noun,
-        correction: `${article} ${noun}`,
-        rule: "article_usage",
-      });
-    }
-
-    return errors.slice(0, 3); // Very limited suggestions
-  }
-
-  checkPronouns(sentence) {
-    const errors = [];
-
-    const confusedPairs = [
-      {
-        wrong:
-          /\bthere\s+(way|idea|approach|method|plan|strategy|work|job|homework|essay|project)\b/gi,
-        correct: "their",
-        explanation: 'Use "their" for possession (belonging to them)',
-      },
-      {
-        wrong: /\btheir\s+(is|are|was|were)\b/gi,
-        correct: "there",
-        explanation: 'Use "there" for location or existence',
-      },
-      {
-        wrong: /\bits\s+(a|an|the|very|really|so|quite)\b/gi,
-        correct: "it's",
-        explanation: 'Use "it\'s" as contraction for "it is" or "it has"',
-      },
-      {
-        wrong: /\byour\s+(a|an|the|going|coming|doing|being|very|really)\b/gi,
-        correct: "you're",
-        explanation: 'Use "you\'re" as contraction for "you are"',
-      },
-    ];
-
-    confusedPairs.forEach(({ wrong, correct, explanation }) => {
-      const matches = sentence.match(wrong);
-      if (matches) {
-        matches.forEach((match) => {
-          errors.push({
-            sentence,
-            error: `Incorrect pronoun usage`,
-            original: match,
-            correction: match.replace(/\w+/, correct),
-            explanation,
-            rule: "pronoun_confusion",
-          });
-        });
-      }
-    });
-
-    return errors;
-  }
-
-  checkVerbTense(sentence) {
-    const errors = [];
-
-    // Check for sudden tense shifts (simplified)
-    const hasPast =
-      /\b(was|were|had|did|went|came|saw|made|took|gave|got|said|told|wrote|found|thought|knew|felt|became)\b/i.test(
-        sentence
-      );
-    const hasPresent =
-      /\b(is|are|am|has|have|does|do|goes|comes|sees|makes|takes|gives|gets|says|tells|writes|finds|thinks|knows|feels|becomes)\b/i.test(
-        sentence
-      );
-
-    if (hasPast && hasPresent) {
-      errors.push({
-        sentence,
-        error: "Possible tense shift within sentence",
-        correction: "Keep verb tenses consistent throughout your sentence",
-        rule: "verb_tense",
-        severity: "moderate",
-      });
-    }
-
-    return errors;
-  }
-
-  /**
-   * Check if a word looks like a technical term vs a real spelling error
-   */
-  looksLikeTechnicalTerm(original, suggestion) {
-    // If the "correction" is completely different, it's probably a technical term
-    const distance = natural.LevenshteinDistance(
-      original.toLowerCase(),
-      suggestion.toLowerCase()
-    );
-
-    // If Levenshtein distance is > 3, it's probably not a simple spelling error
-    return distance > 3;
-  }
-
-  checkDoubleNegatives(sentence) {
-    const errors = [];
-    const negatives = [
-      "not",
-      "n't",
-      "no",
-      "never",
-      "nothing",
-      "nobody",
-      "nowhere",
-      "neither",
-      "none",
-    ];
-
-    let negCount = 0;
-    let foundNegs = [];
-
-    negatives.forEach((neg) => {
-      if (sentence.toLowerCase().includes(neg)) {
-        negCount++;
-        foundNegs.push(neg);
-      }
-    });
-
-    if (negCount >= 2) {
-      errors.push({
-        sentence,
-        error: "Double negative detected",
-        original: foundNegs.join(" ... "),
-        correction: "Remove one negative word to make the sentence clearer",
-        rule: "double_negative",
-      });
-    }
-
-    return errors;
-  }
-
-  isFragment(sentence) {
-    // Very basic fragment detection
-    const words = sentence.split(/\s+/);
-    if (words.length < 3) return true;
-
-    // Check for verb
-    const hasVerb =
-      /\b(is|are|am|was|were|be|been|being|have|has|had|do|does|did|can|could|will|would|shall|should|may|might|must|going|coming|make|take|get|give|see|know|think|want|need|use|find|tell|ask|work|seem|feel|try|leave|call|keeps?|goes|comes|makes|takes|gets|gives|sees|knows|thinks|wants|needs|uses|finds|tells|asks|works|seems|feels|tries|leaves|calls)\b/i.test(
-        sentence
-      );
-
-    return !hasVerb;
-  }
-
-  isRunOn(sentence) {
-    // Check for comma splices and very long sentences
-    const words = sentence.split(/\s+/);
-    if (words.length > 40) return true; // Very long sentence
-
-    // Check for comma splice pattern
-    const hasCommaSplice =
-      /,\s+(however|therefore|moreover|furthermore|consequently|nevertheless|thus|hence|indeed)\s/i.test(
-        sentence
-      );
-
-    return hasCommaSplice;
-  }
-
-  /**
-   * Improved style issues detection
-   */
-  detectStyleIssues(text, studentLevel) {
-    const issues = [];
-
-    // Only flag obvious style problems
-    const stylePatterns = [
-      {
-        pattern: /\b(very|really|quite)\s+\w+/gi,
-        reason: "Overused intensifier",
-        suggestion: "Try using a stronger word instead",
-        example: 'Instead of "very good" try "excellent" or "outstanding"',
-      },
-      {
-        pattern: /\b(a lot|lots of)\b/gi,
-        reason: "Informal expression",
-        suggestion:
-          'Use more formal alternatives like "many", "much", or "numerous"',
-        example: 'Instead of "a lot of people" try "many people"',
-      },
-      {
-        pattern: /\b(thing|stuff)\b/gi,
-        reason: "Vague language",
-        suggestion: "Be more specific about what you are referring to",
-        example:
-          'Instead of "many things" try "many factors" or "several elements"',
-      },
-    ];
-
-    stylePatterns.forEach(({ pattern, reason, suggestion, example }) => {
-      const matches = text.match(pattern);
-      if (matches) {
-        matches.forEach((match) => {
-          issues.push({
-            type: reason,
-            text: match,
-            context: this.getWordContext(text, match),
-            suggestion: suggestion,
-            example: example,
-            position: this.findWordPosition(text, match),
-          });
-        });
-      }
-    });
-
-    return issues.slice(0, 5); // Limit style feedback
-  }
-
-  /**
-   * Helper methods
-   */
-  getWordContext(text, word, contextLength = 30) {
-    const index = text.indexOf(word);
-    if (index === -1) return "";
-
-    const start = Math.max(0, index - contextLength);
-    const end = Math.min(text.length, index + word.length + contextLength);
-    return "..." + text.substring(start, end).trim() + "...";
-  }
-
-  findWordPosition(text, word) {
-    const index = text.indexOf(word);
-    return {
-      start: index,
-      end: index + word.length,
-    };
-  }
-
-  isRealFragment(sentence) {
-    // Only flag obvious fragments
-    const words = sentence.split(/\s+/);
-    if (words.length < 4) return true;
-
-    // Check for basic sentence structure
-    const hasSubject =
-      /\b(I|you|he|she|it|we|they|this|that|these|those|\w+s)\b/i.test(
-        sentence
-      );
-    const hasVerb =
-      /\b(is|are|was|were|have|has|had|do|does|did|can|could|will|would|should|may|might|must|go|goes|went|make|makes|made|take|takes|took)\b/i.test(
-        sentence
-      );
-
-    return !(hasSubject && hasVerb);
-  }
-
-  /**
-   * Only flag VERY long sentences as run-on
-   */
-  isRunOnSentence(sentence) {
-    const words = sentence.split(/\s+/);
-    // Only flag extremely long sentences (60+ words)
-    return words.length > 60;
-  }
-
-  getStyleSuggestion(reason, level) {
-    const suggestions = {
-      "passive voice": {
-        beginner:
-          'Try to use active voice. Instead of "The ball was thrown," write "John threw the ball."',
-        intermediate: "Active voice makes writing more direct and engaging.",
-        advanced:
-          "Consider converting to active voice for stronger, more direct prose.",
-      },
-      "weasel words": {
-        beginner:
-          'Avoid vague words like "very," "really," "quite." Be more specific.',
-        intermediate: "Replace weak qualifiers with concrete descriptions.",
-        advanced:
-          "Eliminate unnecessary qualifiers to strengthen your argument.",
-      },
-      wordy: {
-        beginner: "This phrase is too long. Try to make it shorter.",
-        intermediate: "Simplify this phrase for clearer communication.",
-        advanced: "Consider a more concise alternative.",
-      },
+❌ "${error.original}" → ✅ "${error.correction}"`,
     };
 
-    return (
-      suggestions[reason]?.[level] ||
-      suggestions[reason]?.intermediate ||
-      "Consider revising for clarity."
-    );
+    return explanations[studentLevel] || explanations.intermediate;
   }
 
+  // ==================== POSITIVE FEEDBACK ====================
+
   /**
-   * NEW: Vocabulary enhancement suggestions using Dictionary API
+   * ✅ Generate positive feedback highlighting good aspects
    */
-  async suggestVocabularyEnhancements(text, studentLevel) {
-    if (studentLevel === "beginner") return []; // Skip for beginners
+  generatePositiveFeedback(text, studentLevel, analysis) {
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+    const positiveFeedback = [];
+    const usedSentences = new Set();
 
-    const suggestions = [];
-    const doc = compromise(text);
+    sentences.forEach((sentence, idx) => {
+      if (usedSentences.has(sentence) || positiveFeedback.length >= 3) return;
 
-    // Find commonly overused words
+      const words = sentence.trim().split(/\s+/);
+      const hasGoodStructure = words.length >= 8 && words.length <= 25;
+      const hasTransition =
+        /^(however|furthermore|therefore|moreover|consequently|thus|additionally)/i.test(
+          sentence.trim()
+        );
+      const hasGoodVocabulary =
+        /\b(significant|demonstrate|illustrate|furthermore|consequently|essential|crucial)\b/i.test(
+          sentence.toLowerCase()
+        );
+
+      if (hasGoodStructure || hasTransition || hasGoodVocabulary) {
+        let praise = "";
+
+        if (hasGoodStructure) {
+          praise =
+            studentLevel === "beginner"
+              ? "Great sentence length!"
+              : "Excellent sentence structure!";
+        }
+        if (hasTransition) {
+          praise = "Good use of transition words!";
+        }
+        if (hasGoodVocabulary) {
+          praise = "Strong vocabulary choice!";
+        }
+
+        positiveFeedback.push({
+          sentence:
+            sentence.trim().substring(0, 100) +
+            (sentence.length > 100 ? "..." : ""),
+          praise,
+          position: idx + 1,
+        });
+
+        usedSentences.add(sentence);
+      }
+    });
+
+    // Add general positive feedback if none found
+    if (positiveFeedback.length === 0 && analysis.wordCount >= 100) {
+      positiveFeedback.push({
+        sentence: "Overall essay",
+        praise: "Good effort in completing a full essay!",
+        position: 0,
+      });
+    }
+
+    return positiveFeedback;
+  }
+
+  // ==================== VOCABULARY ENHANCEMENTS ====================
+
+  /**
+   * ✅ Suggest vocabulary enhancements
+   */
+  async suggestVocabularyEnhancements(text, studentLevel, analysis) {
+    if (studentLevel === "beginner") return [];
+
     const overusedWords = this.findOverusedWords(text);
+    const suggestions = [];
 
-    for (const word of overusedWords.slice(0, 5)) {
+    for (const word of overusedWords.slice(0, 3)) {
       try {
         const alternatives = await this.getWordAlternatives(word);
         if (alternatives.length > 0) {
           suggestions.push({
             original: word,
             alternatives: alternatives.slice(0, 3),
-            reason: `"${word}" appears ${
-              overusedWords.find((w) => w === word)
-                ? "frequently"
-                : "multiple times"
-            }. Consider varying your vocabulary.`,
-            context: this.getContext(text, word),
+            reason: this.getVocabularySuggestionReason(word, studentLevel),
+            frequency: this.countWordFrequency(text, word),
           });
         }
       } catch (error) {
-        // Skip if API fails
         continue;
       }
     }
@@ -1087,53 +904,20 @@ class FeedbackGenerator {
   }
 
   findOverusedWords(text) {
-    const words = text.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
+    const words = text.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
     const frequency = {};
-
-    // Common words to ignore
     const ignore = new Set([
+      "the",
+      "and",
       "that",
       "this",
       "with",
-      "from",
+      "for",
       "have",
-      "will",
-      "been",
+      "are",
       "were",
-      "their",
-      "which",
-      "about",
-      "would",
-      "there",
-      "could",
-      "should",
-      "these",
-      "those",
-      "what",
-      "when",
-      "where",
-      "them",
-      "then",
-      "than",
-      "into",
-      "very",
-      "some",
-      "make",
-      "like",
-      "time",
-      "just",
-      "know",
-      "take",
-      "people",
-      "year",
-      "good",
-      "work",
-      "also",
-      "well",
-      "many",
-      "much",
-      "most",
-      "more",
+      "from",
+      "been",
     ]);
 
     words.forEach((word) => {
@@ -1149,316 +933,293 @@ class FeedbackGenerator {
   }
 
   async getWordAlternatives(word) {
-    // Check cache first
     if (this.definitionCache.has(word)) {
       return this.definitionCache.get(word);
     }
 
-    try {
-      const response = await axios.get(
-        `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`,
-        { timeout: 3000 }
-      );
+    const simpleSynonyms = {
+      very: ["extremely", "highly", "remarkably", "exceptionally"],
+      good: ["excellent", "great", "wonderful", "superb"],
+      bad: ["poor", "negative", "unfavorable", "detrimental"],
+      important: ["significant", "crucial", "essential", "vital"],
+      big: ["large", "substantial", "considerable", "significant"],
+      small: ["minor", "modest", "limited", "moderate"],
+      many: ["numerous", "multiple", "various", "several"],
+      thing: ["aspect", "element", "factor", "component"],
+      get: ["obtain", "acquire", "receive", "gain"],
+      make: ["create", "produce", "generate", "develop"],
+      use: ["utilize", "employ", "apply", "implement"],
+    };
 
-      const synonyms = new Set();
-      response.data.forEach((entry) => {
-        entry.meanings?.forEach((meaning) => {
-          meaning.definitions?.forEach((def) => {
-            def.synonyms?.forEach((syn) => synonyms.add(syn));
-          });
-          meaning.synonyms?.forEach((syn) => synonyms.add(syn));
-        });
-      });
-
-      const result = Array.from(synonyms).slice(0, 5);
-      this.definitionCache.set(word, result);
-      return result;
-    } catch (error) {
-      return [];
-    }
+    const result = simpleSynonyms[word.toLowerCase()] || [];
+    this.definitionCache.set(word, result);
+    return result;
   }
 
+  getVocabularySuggestionReason(word, studentLevel) {
+    const reasons = {
+      beginner: `Try using different words instead of "${word}" to make your writing more interesting.`,
+      intermediate: `"${word}" appears frequently. Consider varying your vocabulary for better style.`,
+      advanced: `The repeated use of "${word}" could be diversified to enhance lexical variety.`,
+    };
+
+    return reasons[studentLevel] || reasons.intermediate;
+  }
+
+  countWordFrequency(text, word) {
+    const regex = new RegExp(`\\b${word}\\b`, "gi");
+    const matches = text.match(regex);
+    return matches ? matches.length : 0;
+  }
+
+  // ==================== SENTENCE STRUCTURE ANALYSIS ====================
+
   /**
-   * NEW: Sentence structure analysis
+   * ✅ Analyze sentence structure and provide suggestions
    */
   analyzeSentenceStructure(analysis, studentLevel) {
     const issues = [];
     const suggestions = [];
 
-    // Check sentence length variety
-    const sentenceLengths = analysis.sentences.map(
-      (s) => s.split(/\s+/).length
-    );
-    const avgLength =
-      sentenceLengths.reduce((a, b) => a + b, 0) / sentenceLengths.length;
-    const variance =
-      sentenceLengths.reduce(
-        (sum, len) => sum + Math.pow(len - avgLength, 2),
-        0
-      ) / sentenceLengths.length;
+    const { avgSentenceLength, sentenceCount } = analysis;
 
-    if (variance < 10) {
-      issues.push("Sentences are too similar in length");
-      suggestions.push(
-        "Vary your sentence structure with short, medium, and long sentences"
-      );
+    if (avgSentenceLength < 8) {
+      suggestions.push({
+        issue: "Short sentences",
+        suggestion: "Try combining some short sentences to create more variety",
+        priority: "medium",
+      });
+    } else if (avgSentenceLength > 25) {
+      suggestions.push({
+        issue: "Long sentences",
+        suggestion:
+          "Consider breaking down some long sentences for better clarity",
+        priority: "high",
+      });
     }
 
-    // Check for sentence variety
-    const shortSentences = sentenceLengths.filter((l) => l < 10).length;
-    const longSentences = sentenceLengths.filter((l) => l > 25).length;
-
-    if (shortSentences / sentenceLengths.length > 0.7) {
-      issues.push("Many very short sentences");
-      suggestions.push(
-        "Combine related ideas into longer, more complex sentences"
-      );
+    if (analysis.paragraphCount > 0) {
+      const avgParagraphLength = analysis.wordCount / analysis.paragraphCount;
+      if (avgParagraphLength > 200) {
+        suggestions.push({
+          issue: "Long paragraphs",
+          suggestion:
+            "Consider breaking long paragraphs into smaller ones for better readability",
+          priority: "medium",
+        });
+      }
     }
 
-    if (longSentences / sentenceLengths.length > 0.5) {
-      issues.push("Many very long sentences");
-      suggestions.push(
-        "Break down complex ideas into shorter, clearer sentences"
-      );
-    }
-
-    // Check paragraph length
-    const paragraphLengths = analysis.paragraphs.map(
-      (p) => p.split(/\s+/).length
-    );
-    const avgParagraphLength =
-      paragraphLengths.reduce((a, b) => a + b, 0) / paragraphLengths.length;
-
-    if (avgParagraphLength < 50) {
-      suggestions.push(
-        "Develop your paragraphs more fully with examples and explanations"
-      );
-    } else if (avgParagraphLength > 200) {
-      suggestions.push(
-        "Consider breaking long paragraphs into smaller ones for better readability"
-      );
+    // Check sentence variety
+    if (sentenceCount >= 5) {
+      const varietyScore = this.calculateSentenceVariety(analysis);
+      if (varietyScore < 0.5) {
+        suggestions.push({
+          issue: "Limited sentence variety",
+          suggestion: "Use a mix of simple, compound, and complex sentences",
+          priority: "medium",
+        });
+      }
     }
 
     return {
       issues,
-      suggestions,
+      suggestions: suggestions.slice(0, 3),
       metrics: {
-        avgSentenceLength: avgLength.toFixed(1),
-        sentenceVariety: variance > 20 ? "Good" : "Needs improvement",
-        avgParagraphLength: avgParagraphLength.toFixed(0),
+        avgSentenceLength: avgSentenceLength.toFixed(1),
+        sentenceVariety: sentenceCount > 10 ? "Good" : "Could use more variety",
+        avgParagraphLength:
+          analysis.paragraphCount > 0
+            ? Math.round(analysis.wordCount / analysis.paragraphCount)
+            : 0,
+        sentenceCount: sentenceCount,
       },
     };
   }
 
-  countPassiveVoice(sentences) {
-    let count = 0;
-    const passivePattern = /\b(am|is|are|was|were|be|been|being)\s+\w+ed\b/gi;
-
-    sentences.forEach((sentence) => {
-      if (passivePattern.test(sentence)) count++;
-    });
-
-    return count;
+  calculateSentenceVariety(analysis) {
+    // Simple variety score based on sentence length diversity
+    return Math.min(1, analysis.vocabularyDiversity * 2);
   }
 
-  identifyComplexSentences(sentences) {
-    return sentences.filter((s) => {
-      const words = s.split(/\s+/).length;
-      const clauses = (s.match(/,|;|\band\b|\bor\b|\bbut\b/gi) || []).length;
-      return words > 20 || clauses > 2;
-    });
-  }
+  // ==================== CONTENT FEEDBACK ====================
 
-  getContext(text, word) {
-    const index = text.indexOf(word);
-    if (index === -1) return "";
-
-    const start = Math.max(0, index - 40);
-    const end = Math.min(text.length, index + word.length + 40);
-    return "..." + text.substring(start, end).trim() + "...";
-  }
-
-  getGrammarExplanation(errorType, level) {
-    const explanations = {
-      subject_verb: {
-        beginner:
-          "The subject and verb must match. With 'he/she/it', add 's' to the verb. Example: 'He walks' not 'He walk'.",
-        intermediate:
-          "Ensure subject-verb agreement: singular subjects take singular verbs (add 's').",
-        advanced:
-          "Maintain subject-verb agreement, particularly with third-person singular subjects.",
-      },
-      articles: {
-        beginner:
-          "Use 'a' or 'an' before singular nouns. Use 'a' before consonants (a book), 'an' before vowels (an apple).",
-        intermediate:
-          "Articles (a/an/the) are required before singular countable nouns. 'The' for specific items, 'a/an' for general.",
-        advanced:
-          "Ensure proper article usage based on noun countability and specificity.",
-      },
-      pronouns: {
-        beginner:
-          "Common confusions: 'there' (place), 'their' (ownership), 'they're' (they are). 'Its' (ownership), 'it's' (it is).",
-        intermediate:
-          "Distinguish homophones carefully: there/their/they're, its/it's, your/you're.",
-        advanced: "Use context-appropriate pronouns and possessives correctly.",
-      },
-      tense: {
-        beginner:
-          "Keep the same time throughout your sentence. Don't mix 'is' with 'was'.",
-        intermediate:
-          "Maintain consistent verb tense within sentences and paragraphs.",
-        advanced:
-          "Ensure temporal consistency unless intentionally shifting timeframes.",
-      },
-      fragments: {
-        beginner:
-          "Every sentence needs a subject (who/what) and a verb (action). Example: 'The dog runs.' not just 'Running fast.'",
-        intermediate:
-          "Incomplete sentences (fragments) lack either a subject or a complete verb.",
-        advanced:
-          "Ensure all clauses form complete, independent thoughts with both subject and predicate.",
-      },
-      run_on: {
-        beginner:
-          "Don't connect two complete sentences with just a comma. Use a period or add 'and', 'but', 'or'.",
-        intermediate:
-          "Avoid comma splices. Use semicolons, conjunctions, or separate sentences.",
-        advanced:
-          "Connect independent clauses with appropriate punctuation or conjunctions.",
-      },
-    };
-
-    return (
-      explanations[errorType]?.[level] ||
-      explanations[errorType]?.intermediate ||
-      "Grammar issue detected."
-    );
-  }
-
-  // Content feedback generation (enhanced)
-  generateContentFeedback(analysis, contentScore, level) {
+  /**
+   * ✅ Generate content-specific feedback
+   */
+  generateContentFeedback(analysis, contentScore, studentLevel) {
     const strengths = [];
     const improvements = [];
     const examples = [];
 
-    const normalizedScore = contentScore * 100;
-
-    // Analyze strengths
     if (analysis.hasThesis) {
       strengths.push("Clear thesis statement present");
-    }
-
-    if (analysis.vocabularyDiversity > 0.5) {
-      strengths.push(
-        `Good vocabulary variety (${Math.round(
-          analysis.vocabularyDiversity * 100
-        )}% unique words)`
-      );
-    }
-
-    if (analysis.transitions.length >= 3) {
-      strengths.push(
-        `Effective use of transitions (${analysis.transitions.length} found)`
-      );
-    }
-
-    if (analysis.paragraphCount >= 5) {
-      strengths.push("Well-structured with multiple paragraphs");
-    }
-
-    // Suggest improvements
-    if (!analysis.hasThesis) {
+    } else {
+      const thesisSuggestions = {
+        beginner: "Add a sentence that says what your essay is about",
+        intermediate: "Include a clear thesis statement in your introduction",
+        advanced: "Consider adding a more explicit thesis statement",
+      };
       improvements.push(
-        "Add a clear thesis statement that presents your main argument"
+        thesisSuggestions[studentLevel] || thesisSuggestions.intermediate
       );
+
       examples.push({
         type: "thesis_example",
-        text: "Example thesis: 'While technology offers many benefits in education, it should not completely replace traditional teaching methods.'",
+        text: "Example: 'While social media offers many benefits, it also presents significant challenges that require careful consideration.'",
         explanation: "Place your thesis at the end of your introduction",
       });
     }
 
     if (analysis.transitions.length < 3) {
-      improvements.push("Use more transitional phrases to connect your ideas");
+      const transitionSuggestions = {
+        beginner:
+          "Use words like 'also', 'but', and 'so' to connect your ideas",
+        intermediate: "Add more transition words to connect your paragraphs",
+        advanced: "Incorporate more sophisticated transitional phrases",
+      };
+      improvements.push(
+        transitionSuggestions[studentLevel] ||
+          transitionSuggestions.intermediate
+      );
+
       examples.push({
         type: "transitions",
-        text: "Try: 'Furthermore', 'In addition', 'However', 'On the other hand', 'As a result', 'Consequently'",
+        text: "Try: 'Furthermore', 'However', 'Therefore', 'Consequently'",
         explanation: "Transitions help readers follow your argument",
       });
     }
 
-    if (analysis.avgSentenceLength < 12) {
-      improvements.push("Develop sentences with more detail and complexity");
-      examples.push({
-        type: "sentence_development",
-        before: "Technology is important. It helps students.",
-        after:
-          "Technology is important in education because it helps students access information quickly and learn at their own pace.",
-        explanation: "Combine related ideas and add supporting details",
-      });
-    }
-
-    if (analysis.wordCount < 300 && level !== "beginner") {
+    // Check for supporting details
+    if (contentScore < 0.65) {
       improvements.push(
-        "Expand your essay with more examples and explanations"
+        "Add more specific examples and details to support your arguments"
       );
+    } else {
+      strengths.push("Good use of supporting details and examples");
     }
 
     return { strengths, improvements, examples };
   }
 
-  generateOrganizationFeedback(analysis, orgScore, level) {
-    const suggestions = [];
-    const positives = [];
+  // ==================== ORGANIZATION FEEDBACK ====================
 
-    if (analysis.hasIntroduction) {
-      positives.push("Clear introduction present");
-    } else {
-      suggestions.push(
-        "Add an introduction that provides background and presents your thesis"
-      );
-    }
-
-    if (analysis.hasConclusion) {
-      positives.push("Conclusion summarizes main points");
-    } else {
-      suggestions.push(
-        "Include a conclusion that restates your thesis and summarizes key arguments"
-      );
-    }
-
-    if (analysis.paragraphCount < 4) {
-      suggestions.push(
-        "Organize ideas into more paragraphs (aim for 5-6 in an academic essay)"
-      );
-    } else if (analysis.paragraphCount >= 5) {
-      positives.push("Good paragraph structure");
-    }
-
-    if (analysis.transitions.length < 3) {
-      suggestions.push(
-        "Use more transition words between paragraphs (Moreover, However, Furthermore)"
-      );
-    }
-
-    const structure = this.assessStructure(analysis);
-
-    return {
-      structure,
-      suggestions,
-      positives,
-      organizationScore: Math.round(orgScore * 100),
+  /**
+   * Generate organization-specific feedback
+   */
+  generateOrganizationFeedback(
+    analysis,
+    organizationScore,
+    studentLevel,
+    essayStructure = null
+  ) {
+    const feedback = {
+      structure: "",
+      suggestions: [],
+      positives: [],
+      organizationScore: Math.round(organizationScore * 100),
     };
+
+    // ✅ Check structure-based organization
+    if (
+      essayStructure &&
+      essayStructure.sections &&
+      essayStructure.sections.length > 0
+    ) {
+      console.log("✅ Using structure-based organization feedback");
+
+      const sections = essayStructure.sections.map((s) => s.toLowerCase());
+      const hasIntro = sections.some((s) => /introduction|intro/i.test(s));
+      const hasConclusion = sections.some((s) => /conclusion|summary/i.test(s));
+
+      if (hasIntro && hasConclusion) {
+        feedback.structure = "✅ Good essay structure with clear sections";
+        feedback.positives.push(
+          "Well-organized with introduction and conclusion"
+        );
+      } else if (!hasConclusion) {
+        const conclusionMessages = {
+          beginner:
+            "Your essay is missing a conclusion. Try adding a final paragraph that summarizes your main points.",
+          intermediate:
+            "Consider adding a conclusion paragraph to summarize your key arguments.",
+          advanced:
+            "The essay would benefit from a concluding section to reinforce your main arguments.",
+        };
+
+        feedback.structure = "⚠️ Missing conclusion section";
+        feedback.suggestions.push(
+          conclusionMessages[studentLevel] || conclusionMessages.intermediate
+        );
+        feedback.organizationScore = Math.max(
+          50,
+          feedback.organizationScore - 20
+        );
+      } else if (!hasIntro) {
+        feedback.structure = "⚠️ Missing introduction section";
+        feedback.suggestions.push(
+          "Add a clear introduction to set up your essay"
+        );
+      }
+    } else {
+      // Fallback to basic structure check
+      if (!analysis.hasConclusion) {
+        const conclusionMessages = {
+          beginner:
+            "Your essay is missing an ending. Try adding a final paragraph that summarizes your main points.",
+          intermediate:
+            "Consider adding a conclusion paragraph to summarize your key arguments.",
+          advanced:
+            "The essay would benefit from a concluding section to reinforce your main arguments.",
+        };
+
+        feedback.structure = "⚠️ Incomplete structure - missing conclusion";
+        feedback.suggestions.push(
+          conclusionMessages[studentLevel] || conclusionMessages.intermediate
+        );
+        feedback.organizationScore = Math.max(
+          50,
+          feedback.organizationScore - 20
+        );
+      } else if (analysis.paragraphCount >= 3) {
+        feedback.structure = "✅ Good essay structure";
+        feedback.positives.push(
+          "Clear introduction, body, and conclusion present"
+        );
+      }
+    }
+
+    // Add level-appropriate transition suggestions
+    const transitionTips = {
+      beginner: "Use connecting words like 'first', 'next', and 'finally'",
+      intermediate:
+        "Use transition words (However, Therefore, Furthermore, etc.)",
+      advanced:
+        "Employ sophisticated transitional devices to enhance coherence",
+    };
+
+    feedback.suggestions.push(
+      transitionTips[studentLevel] || transitionTips.intermediate
+    );
+
+    return feedback;
   }
 
-  generatePersonalizedSummary(params) {
-    const { score, studentLevel, qualityScores, analysis } = params;
+  // ==================== PERSONALIZED SUMMARY ====================
 
-    let overallComment = "";
-    let motivationalMessage = "";
-    const keyTakeaways = [];
-    const nextSteps = [];
+  /**
+   * ✅ Generate personalized summary with actionable insights
+   */
+  generatePersonalizedSummary(params) {
+    const {
+      score,
+      studentLevel,
+      qualityScores,
+      analysis,
+      grammarErrors,
+      spellingErrors,
+      styleSuggestions,
+    } = params;
 
     const avgQuality =
       (qualityScores.grammar +
@@ -1467,134 +1228,394 @@ class FeedbackGenerator {
         qualityScores.style +
         qualityScores.mechanics) /
       5;
-    const normalizedAvg = avgQuality * 100;
 
-    // Overall assessment
-    if (normalizedAvg >= 85) {
+    let overallComment = "";
+    let motivationalMessage = "";
+    const keyTakeaways = [];
+    const nextSteps = [];
+
+    // Level-appropriate feedback
+    if (avgQuality >= 0.8) {
+      const excellentMessages = {
+        beginner: "🎉 Amazing work! You're learning quickly!",
+        intermediate: "🌟 Excellent essay! Strong writing skills demonstrated.",
+        advanced: "💫 Outstanding work! Professional-level writing quality.",
+      };
       overallComment =
-        "🌟 Excellent work! Your essay demonstrates strong writing skills.";
-      motivationalMessage =
-        "Keep up the outstanding effort! Continue refining your academic voice.";
-    } else if (normalizedAvg >= 75) {
-      overallComment =
-        "👍 Good effort! Solid foundation with clear room for growth.";
-      motivationalMessage =
-        "You're on the right track! Focus on the specific areas highlighted below.";
-    } else if (normalizedAvg >= 65) {
-      overallComment = "📚 Making progress! Keep working on the fundamentals.";
-      motivationalMessage =
-        "Practice makes perfect! Work through the feedback systematically.";
+        excellentMessages[studentLevel] || excellentMessages.intermediate;
+      motivationalMessage = "Keep up the great work!";
+    } else if (avgQuality >= 0.65) {
+      const goodMessages = {
+        beginner: "👍 Good job! You're making great progress!",
+        intermediate: "📚 Solid work! Continue practicing to improve further.",
+        advanced: "✅ Good essay with clear potential for refinement.",
+      };
+      overallComment = goodMessages[studentLevel] || goodMessages.intermediate;
+      motivationalMessage = "Practice makes perfect!";
     } else {
+      const needsWorkMessages = {
+        beginner:
+          "💪 Great effort! Writing takes practice - you'll get better!",
+        intermediate: "📝 Good attempt! Focus on the feedback to improve.",
+        advanced:
+          "🔍 The essay shows potential but needs refinement in key areas.",
+      };
       overallComment =
-        "💪 Keep practicing! Focus on building strong foundations.";
-      motivationalMessage =
-        "Writing improves with practice. Start with the most important errors first.";
+        needsWorkMessages[studentLevel] || needsWorkMessages.intermediate;
+      motivationalMessage = "Review the feedback and try again!";
     }
 
-    // Key takeaways
-    if (qualityScores.grammar * 100 < 70) {
-      keyTakeaways.push(
-        "Grammar needs attention - review subject-verb agreement and verb tenses"
-      );
+    // Key takeaways based on quality scores
+    if (grammarErrors.length > 5) {
+      keyTakeaways.push("Focus on grammar accuracy in your next essay");
+    }
+    if (qualityScores.organization < 0.6) {
+      keyTakeaways.push("Work on essay structure and paragraph organization");
+    }
+    if (qualityScores.content < 0.7) {
+      keyTakeaways.push("Develop your arguments with more specific examples");
+    }
+    if (spellingErrors.length > 5) {
+      keyTakeaways.push("Review spelling of commonly misspelled words");
     }
 
-    if (qualityScores.organization * 100 < 70) {
-      keyTakeaways.push(
-        "Improve essay structure with clear introduction, body, and conclusion"
-      );
+    // Ensure at least one takeaway
+    if (keyTakeaways.length === 0) {
+      keyTakeaways.push("Continue practicing to build on your strengths");
     }
 
-    if (qualityScores.content * 100 < 75) {
-      keyTakeaways.push(
-        "Develop arguments more fully with specific examples and evidence"
-      );
-    }
+    // Next steps based on student level
+    const nextStepsBase = {
+      beginner: [
+        "Read your essay out loud to catch mistakes",
+        "Practice the grammar rules highlighted above",
+        "Ask your teacher for help with difficult parts",
+      ],
+      intermediate: [
+        "Review and correct all highlighted errors",
+        "Add a clear thesis statement if missing",
+        "Use transition words between paragraphs",
+        "Read your essay aloud to catch awkward phrasing",
+      ],
+      advanced: [
+        "Refine grammatical accuracy for academic precision",
+        "Enhance vocabulary and stylistic elements",
+        "Strengthen argument development with evidence",
+        "Ensure logical flow between all paragraphs",
+      ],
+    };
 
-    if (analysis.vocabularyDiversity < 0.4) {
-      keyTakeaways.push("Expand vocabulary to avoid repetition");
-    }
-
-    // Next steps (prioritized)
     nextSteps.push(
-      "Review and correct all highlighted spelling and grammar errors"
+      ...(nextStepsBase[studentLevel] || nextStepsBase.intermediate)
     );
-
-    if (!analysis.hasThesis) {
-      nextSteps.push("Add a clear thesis statement to your introduction");
-    }
-
-    nextSteps.push("Read your essay aloud to catch awkward phrasing");
-
-    if (analysis.transitions.length < 3) {
-      nextSteps.push("Add transition words between paragraphs");
-    }
-
-    nextSteps.push("Have someone else read your essay for feedback");
 
     return {
       overallComment,
       motivationalMessage,
-      keyTakeaways,
-      nextSteps,
+      keyTakeaways: keyTakeaways.slice(0, 3),
+      nextSteps: nextSteps.slice(0, 4),
       wordsAnalyzed: analysis.wordCount,
       sentencesAnalyzed: analysis.sentenceCount,
     };
   }
 
-  // Helper methods
+  // ==================== NEXT STEP RECOMMENDATIONS ====================
+
+  /**
+   * ✅ Generate next step recommendations
+   */
+  generateNextStepRecommendations(
+    grammarErrors,
+    spellingErrors,
+    qualityScores,
+    studentLevel,
+    analysis
+  ) {
+    const recommendations = [];
+
+    // Grammar recommendations
+    if (grammarErrors.length > 5) {
+      recommendations.push({
+        priority: "high",
+        category: "grammar",
+        recommendation:
+          studentLevel === "beginner"
+            ? "Practice basic grammar rules like subject-verb agreement"
+            : "Review and practice the specific grammar patterns highlighted in your feedback",
+        resources: ["Grammar practice worksheets", "Online grammar exercises"],
+      });
+    }
+
+    // Spelling recommendations
+    if (spellingErrors.length > 5) {
+      recommendations.push({
+        priority: "high",
+        category: "spelling",
+        recommendation:
+          "Create a personal spelling list and practice these words daily",
+        resources: ["Spell checker tools", "Vocabulary flashcards"],
+      });
+    }
+
+    // Organization recommendations
+    if (qualityScores.organization < 0.6) {
+      recommendations.push({
+        priority: "high",
+        category: "organization",
+        recommendation:
+          studentLevel === "beginner"
+            ? "Practice writing with clear beginning, middle, and end"
+            : "Use paragraph planning techniques before writing",
+        resources: [
+          "Essay structure templates",
+          "Paragraph organization guides",
+        ],
+      });
+    }
+
+    // Content recommendations
+    if (qualityScores.content < 0.65) {
+      recommendations.push({
+        priority: "medium",
+        category: "content",
+        recommendation:
+          "Add more specific examples and details to support your main ideas",
+        resources: ["Example essay analysis", "Brainstorming techniques"],
+      });
+    }
+
+    // Style recommendations
+    if (qualityScores.style < 0.65) {
+      recommendations.push({
+        priority: "medium",
+        category: "style",
+        recommendation:
+          "Practice using more varied vocabulary and sentence structures",
+        resources: [
+          "Vocabulary building exercises",
+          "Sentence variety practice",
+        ],
+      });
+    }
+
+    // General recommendation
+    if (recommendations.length === 0) {
+      recommendations.push({
+        priority: "low",
+        category: "general",
+        recommendation:
+          "Continue practicing regularly to maintain your strong writing skills",
+        resources: ["Writing prompts", "Peer review activities"],
+      });
+    }
+
+    return recommendations.slice(0, 4);
+  }
+
+  // ==================== MOTIVATIONAL MESSAGE ====================
+
+  /**
+   * ✅ Generate motivational message based on performance
+   */
+  generateMotivationalMessage(score, studentLevel, recentPerformance) {
+    const scorePercentage = score;
+
+    const messages = {
+      beginner: {
+        excellent:
+          "You're doing fantastic! Your writing is improving with every essay. Keep practicing!",
+        good: "Great job! You're building strong writing skills. Every essay helps you grow!",
+        needsWork:
+          "Don't give up! Writing is a skill that improves with practice. Focus on the feedback and try again!",
+      },
+      intermediate: {
+        excellent:
+          "Outstanding work! Your dedication to improving your writing is paying off!",
+        good: "You're making solid progress! Keep focusing on the areas highlighted in your feedback.",
+        needsWork:
+          "Stay motivated! Review the feedback carefully and apply it to your next essay.",
+      },
+      advanced: {
+        excellent:
+          "Exceptional work! Your writing demonstrates sophisticated skills and strong attention to detail.",
+        good: "Strong performance! Continue refining your skills to reach the highest level.",
+        needsWork:
+          "Focus on the specific areas for improvement to enhance your already strong foundation.",
+      },
+    };
+
+    const level = messages[studentLevel] || messages.intermediate;
+
+    if (scorePercentage >= 85) return level.excellent;
+    if (scorePercentage >= 70) return level.good;
+    return level.needsWork;
+  }
+
+  // ==================== STYLE DETECTION ====================
+
+  /**
+   * ✅ Detect style suggestions with level-appropriate explanations
+   */
+  detectStyleSuggestions(text, studentLevel) {
+    const suggestions = [];
+    const seenPositions = new Set();
+
+    const stylePatterns = [
+      {
+        pattern: /\b(a lot|lots of)\b/gi,
+        type: "informal_expression",
+        suggestion: "many/much",
+        explanations: {
+          beginner:
+            "Use 'many' for things you can count (people, books) and 'much' for things you can't count (time, information).",
+          intermediate:
+            "Replace informal 'a lot' with more academic alternatives like 'many', 'much', or 'numerous'.",
+          advanced:
+            "Consider using more precise quantifiers instead of the informal 'a lot'.",
+        },
+      },
+      {
+        pattern: /\b(thing|stuff)\b/gi,
+        type: "vague_language",
+        suggestion: "more specific terms",
+        explanations: {
+          beginner:
+            "Try to be more specific. Instead of 'thing', say what you really mean.",
+          intermediate:
+            "Use precise language to strengthen your arguments. Replace vague terms with specific ones.",
+          advanced:
+            "Employ more precise terminology to enhance the academic tone of your writing.",
+        },
+      },
+      {
+        pattern: /\b(got|getting)\b/gi,
+        type: "informal_verb",
+        suggestion: "received/obtaining/became",
+        explanations: {
+          beginner:
+            "Use more formal words like 'received' or 'became' instead of 'got'.",
+          intermediate:
+            "Replace the informal verb 'got' with more academic alternatives.",
+          advanced:
+            "Consider using more formal verb choices to improve academic style.",
+        },
+      },
+    ];
+
+    stylePatterns.forEach(({ pattern, type, suggestion, explanations }) => {
+      const matches = [...text.matchAll(pattern)];
+
+      for (const match of matches) {
+        const posKey = `${match.index}-${match[0]}`;
+        if (seenPositions.has(posKey)) continue;
+        seenPositions.add(posKey);
+
+        suggestions.push({
+          type: type,
+          text: match[0],
+          suggestion: suggestion,
+          explanation: explanations[studentLevel] || explanations.intermediate,
+          context: this.getContext(text, match[0]),
+          position: {
+            start: match.index,
+            end: match.index + match[0].length,
+          },
+          category: "style",
+          severity: "suggestion",
+        });
+      }
+    });
+
+    return suggestions.slice(0, 5);
+  }
+
+  // ==================== ESSAY ANALYSIS ====================
+
+  /**
+   * ✅ Analyze essay structure and content
+   */
+  analyzeEssay(text, essayStructure = null) {
+    const doc = compromise(text);
+    const sentences = text.split(/[.!?]+/).filter((s) => s.trim());
+    const paragraphs = text.split(/\n\n+/).filter((p) => p.trim());
+    const words = text.match(/\b\w+\b/g) || [];
+
+    // ✅ Use structure if provided
+    let hasIntroduction = false;
+    let hasConclusion = false;
+    let paragraphCount = paragraphs.length;
+
+    if (
+      essayStructure &&
+      essayStructure.sections &&
+      essayStructure.sections.length > 0
+    ) {
+      console.log("✅ Using essay structure for analysis");
+
+      // Check for introduction
+      const firstSection = essayStructure.sections[0].toLowerCase();
+      hasIntroduction = /introduction|intro/i.test(firstSection);
+
+      // Check for conclusion
+      const sections = essayStructure.sections.map((s) => s.toLowerCase());
+      hasConclusion = sections.some((s) =>
+        /conclusion|summary|closing/i.test(s)
+      );
+
+      // Use structure paragraph count
+      if (essayStructure.paragraphs && essayStructure.paragraphs.length > 0) {
+        paragraphCount = essayStructure.paragraphs.length;
+      }
+    } else {
+      // Fallback to text-based detection
+      hasIntroduction = this.hasIntroduction(paragraphs);
+      hasConclusion = this.hasConclusion(paragraphs);
+    }
+
+    return {
+      sentences,
+      paragraphs,
+      words,
+      wordCount: words.length,
+      sentenceCount: sentences.length,
+      paragraphCount: paragraphCount,
+      nouns: doc.nouns().out("array"),
+      verbs: doc.verbs().out("array"),
+      adjectives: doc.adjectives().out("array"),
+      hasIntroduction: hasIntroduction,
+      hasConclusion: hasConclusion,
+      hasThesis: this.hasThesis(text),
+      transitions: this.findTransitions(sentences),
+      avgSentenceLength: words.length / Math.max(sentences.length, 1),
+      vocabularyDiversity:
+        new Set(words.map((w) => w.toLowerCase())).size /
+        Math.max(words.length, 1),
+      essayStructure: essayStructure,
+    };
+  }
+
   hasIntroduction(paragraphs) {
     if (paragraphs.length === 0) return false;
     const first = paragraphs[0].toLowerCase();
-    const indicators = [
-      "introduction",
-      "this essay",
-      "will discuss",
-      "will explore",
-      "will examine",
-      "will analyze",
-      "is important",
-      "focuses on",
-      "in this essay",
-      "this paper",
-    ];
-    const words = first.split(/\s+/);
-    return words.length >= 30 || indicators.some((ind) => first.includes(ind));
+    return (
+      paragraphs[0].split(/\s+/).length >= 30 ||
+      /this essay|will discuss|will explore|focuses on|introduction/.test(first)
+    );
   }
 
   hasConclusion(paragraphs) {
     if (paragraphs.length === 0) return false;
     const last = paragraphs[paragraphs.length - 1].toLowerCase();
-    const indicators = [
-      "conclusion",
-      "in summary",
-      "to conclude",
-      "in conclusion",
-      "to sum up",
-      "overall",
-      "ultimately",
-      "in the end",
-      "therefore",
-      "thus",
-    ];
-    const words = last.split(/\s+/);
-    return words.length >= 30 || indicators.some((ind) => last.includes(ind));
+    return /conclusion|in summary|to conclude|overall|therefore|finally/.test(
+      last
+    );
   }
 
   hasThesis(text) {
     const first500 = text.substring(0, 500).toLowerCase();
-    const indicators = [
-      "will discuss",
-      "will explore",
-      "will examine",
-      "focuses on",
-      "this essay",
-      "main argument",
-      "argue that",
-      "will show",
-      "demonstrates",
-      "thesis",
-    ];
-    return indicators.some((ind) => first500.includes(ind));
+    return /will discuss|will explore|argue that|thesis|main argument|this essay will/.test(
+      first500
+    );
   }
 
   findTransitions(sentences) {
@@ -1603,237 +1624,90 @@ class FeedbackGenerator {
       "therefore",
       "moreover",
       "furthermore",
-      "firstly",
-      "secondly",
-      "finally",
-      "in addition",
-      "on the other hand",
       "consequently",
-      "as a result",
       "for example",
-      "for instance",
+      "in addition",
       "similarly",
-      "likewise",
       "in contrast",
-      "nevertheless",
-      "also",
-      "additionally",
-      "meanwhile",
-      "subsequently",
+      "thus",
     ];
     const found = new Set();
 
     sentences.forEach((s) => {
       const lower = s.toLowerCase();
       transitions.forEach((t) => {
-        if (lower.includes(t)) {
-          found.add(t);
-        }
+        if (lower.includes(t)) found.add(t);
       });
     });
 
     return Array.from(found);
   }
 
-  assessStructure(analysis) {
-    const score =
-      analysis.hasIntroduction +
-      analysis.hasConclusion +
-      (analysis.paragraphCount >= 5 ? 1 : 0);
+  // ==================== HELPER METHODS ====================
 
-    if (score === 3) {
-      return "✓ Well-structured with introduction, body paragraphs, and conclusion";
-    } else if (score === 2) {
-      return "ⓘ Good structure, but missing one key component";
-    } else {
-      return "✗ Needs better organization - add clear introduction, body paragraphs, and conclusion";
+  getContext(text, word) {
+    const index = text.indexOf(word);
+    if (index === -1) return "";
+    const start = Math.max(0, index - 40);
+    const end = Math.min(text.length, index + word.length + 40);
+    return "..." + text.substring(start, end).trim() + "...";
+  }
+
+  findSentenceContaining(sentences, word) {
+    if (!word) {
+      console.warn(
+        "⚠️ Warning: findSentenceContaining called with undefined word"
+      );
+      return null;
     }
+
+    for (const sentence of sentences) {
+      if (sentence && sentence.toLowerCase().includes(word.toLowerCase())) {
+        return sentence;
+      }
+    }
+    return null;
+  }
+
+  improveStyleSentence(sentence, styleIssue) {
+    let improved = sentence;
+    if (
+      styleIssue.type === "informal_expression" &&
+      styleIssue.text.toLowerCase().includes("a lot")
+    ) {
+      if (
+        /a lot of (time|money|effort|work|attention|information)/i.test(
+          sentence
+        )
+      ) {
+        improved = sentence.replace(/a lot of/gi, "much");
+      } else if (/a lot of (people|students|friends|things)/i.test(sentence)) {
+        improved = sentence.replace(/a lot of/gi, "many");
+      } else {
+        improved = sentence.replace(/a lot/gi, "significantly");
+      }
+    } else if (
+      styleIssue.type === "vague_language" &&
+      styleIssue.text.toLowerCase().includes("thing")
+    ) {
+      improved = sentence.replace(/\bthing\b/gi, "aspect");
+    } else if (
+      styleIssue.type === "informal_verb" &&
+      styleIssue.text.toLowerCase().includes("got")
+    ) {
+      improved = sentence.replace(/\bgot\b/gi, "received");
+    }
+    return improved;
+  }
+
+  extractMainWord(text) {
+    const words = text.split(/\s+/);
+    return words.find((word) => word.length > 3) || words[0] || "word";
+  }
+
+  escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 }
 
 module.exports = FeedbackGenerator;
-
-/**
- * ENHANCED: Grammar detection with more comprehensive patterns
- */
-// async detectGrammarErrors(text, studentLevel) {
-//   const errors = [];
-//   const sentences = text.split(/[.!?]+/).filter(s => s.trim());
-
-//   for (let idx = 0; idx < sentences.length; idx++) {
-//     const sentence = sentences[idx].trim();
-//     if (!sentence) continue;
-
-//     // 1. Subject-verb agreement
-//     const svErrors = this.checkSubjectVerbAgreement(sentence);
-//     svErrors.forEach(error => errors.push({
-//       ...error,
-//       sentenceNumber: idx + 1,
-//       type: 'subject_verb_agreement',
-//       explanation: this.getGrammarExplanation('subject_verb', studentLevel),
-//       severity: 'moderate'
-//     }));
-
-//     // 2. Article errors (a/an/the)
-//     const articleErrors = this.checkArticles(sentence);
-//     articleErrors.forEach(error => errors.push({
-//       ...error,
-//       sentenceNumber: idx + 1,
-//       type: 'article_usage',
-//       explanation: this.getGrammarExplanation('articles', studentLevel),
-//       severity: 'minor'
-//     }));
-
-//     // 3. Pronoun errors (there/their/they're, its/it's, your/you're)
-//     const pronounErrors = this.checkPronouns(sentence);
-//     pronounErrors.forEach(error => errors.push({
-//       ...error,
-//       sentenceNumber: idx + 1,
-//       type: 'pronoun_confusion',
-//       explanation: this.getGrammarExplanation('pronouns', studentLevel),
-//       severity: 'moderate'
-//     }));
-
-//     // 4. Verb tense consistency
-//     const tenseErrors = this.checkVerbTense(sentence);
-//     tenseErrors.forEach(error => errors.push({
-//       ...error,
-//       sentenceNumber: idx + 1,
-//       type: 'verb_tense',
-//       explanation: this.getGrammarExplanation('tense', studentLevel),
-//       severity: 'moderate'
-//     }));
-
-//     // 5. Fragment sentences
-//     if (this.isFragment(sentence)) {
-//       errors.push({
-//         sentence,
-//         sentenceNumber: idx + 1,
-//         type: 'sentence_fragment',
-//         error: 'Incomplete sentence (fragment)',
-//         correction: 'Add a subject and verb to make a complete sentence',
-//         explanation: this.getGrammarExplanation('fragments', studentLevel),
-//         severity: 'severe'
-//       });
-//     }
-
-//     // 6. Run-on sentences
-//     if (this.isRunOn(sentence)) {
-//       errors.push({
-//         sentence,
-//         sentenceNumber: idx + 1,
-//         type: 'run_on_sentence',
-//         error: 'Run-on sentence detected',
-//         correction: 'Break this into multiple sentences or use proper punctuation',
-//         explanation: this.getGrammarExplanation('run_on', studentLevel),
-//         severity: 'moderate'
-//       });
-//     }
-
-//     // 7. Double negatives
-//     const doubleNegErrors = this.checkDoubleNegatives(sentence);
-//     doubleNegErrors.forEach(error => errors.push({
-//       ...error,
-//       sentenceNumber: idx + 1,
-//       type: 'double_negative',
-//       explanation: 'Avoid using two negative words in the same clause',
-//       severity: 'moderate'
-//     }));
-//   }
-
-//   return errors.slice(0, 20); // Limit to top 20
-// }
-
-// async detectGrammarErrors(text, studentLevel) {
-//   try {
-//     // Split the essay into sentences first
-//     const sentences = this.splitIntoSentences(text);
-//     const grammarCorrections = [];
-
-//     console.log(
-//       `Processing ${sentences.length} sentences for grammar checking...`
-//     );
-
-//     // Process each sentence individually with timeout for each
-//     for (let i = 0; i < sentences.length; i++) {
-//       const sentence = sentences[i].trim();
-
-//       // Skip very short sentences or whitespace-only
-//       if (sentence.length < 3 || !sentence.match(/[a-zA-Z]/)) continue;
-
-//       try {
-//         const response = await axios.post(
-//           `${process.env.INFERENCE_SERVICE_URL}/correct_grammar`,
-//           {
-//             text: sentence,
-//             mode: "analyze",
-//           },
-//           { timeout: 3000 } // 3 seconds per sentence (reduced from 5)
-//         );
-
-//         // Check if we got corrections and the sentence was actually changed
-//         if (
-//           response.data.corrections &&
-//           response.data.corrections.length > 0 &&
-//           response.data.corrections[0].original !==
-//             response.data.corrections[0].correction
-//         ) {
-//           grammarCorrections.push({
-//             ...response.data.corrections[0],
-//             sentence_number: i + 1,
-//           });
-//         }
-
-//         // Small delay to avoid overwhelming the service (optional)
-//         if (i % 5 === 0 && i < sentences.length - 1) {
-//           await new Promise((resolve) => setTimeout(resolve, 50));
-//         }
-//       } catch (error) {
-//         console.log(
-//           `Skipping sentence ${i + 1} due to error: ${error.message}`
-//         );
-//         // Continue with other sentences even if one fails
-//         continue;
-//       }
-//     }
-
-//     console.log(`Found ${grammarCorrections.length} grammar corrections`);
-
-//     const errors = [];
-
-//     // Convert the corrections to the format expected by your frontend
-//     grammarCorrections.forEach((correction) => {
-//       errors.push({
-//         sentence: correction.original, // This will now be just the sentence, not the whole essay
-//         sentenceNumber: correction.sentence_number,
-//         type: "grammar_correction",
-//         error: "Grammar issue detected",
-//         original: correction.original,
-//         correction: correction.correction,
-//         reason: correction.reason,
-//         explanation: this.getGrammarExplanationFromReason(
-//           correction.reason,
-//           studentLevel
-//         ),
-//         confidence: correction.confidence || 0.8,
-//         severity: this.getGrammarSeverity(
-//           correction.original,
-//           correction.correction
-//         ),
-//       });
-//     });
-
-//     // Also include rule-based errors for comprehensive feedback
-//     const ruleBasedErrors = await this.detectRuleBasedGrammarErrors(
-//       text,
-//       studentLevel
-//     );
-//     errors.push(...ruleBasedErrors);
-
-//     return errors.slice(0, 25);
-//   } catch (error) {
-//     console.error("Grammar analysis service error:", error.message);
-//     // Fallback to rule-based only
-//     return await this.detectRuleBasedGrammarErrors(text, studentLevel);
-//   }
-// }
