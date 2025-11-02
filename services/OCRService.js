@@ -8,6 +8,7 @@ const path = require("path");
 const natural = require("natural");
 const SpellChecker = require("simple-spellchecker");
 const OpenAI = require("openai");
+const getEssay = require("../uploads/test");
 
 class OCRService {
   constructor() {
@@ -119,8 +120,16 @@ class OCRService {
         throw new Error("No text detected in image");
       }
 
+      let dataEssay = null;
+      if (providedTitle) {
+        console.log("providedTitle", providedTitle);
+        dataEssay = getEssay(providedTitle);
+      }
+
+      console.log('data essay', dataEssay)
+
       // ✅ Use Vision's native structure
-      const structure = this.buildStructureFromVisionAPI(textAnnotation);
+      const structure = this.buildStructureFromVisionAPI(dataEssay || textAnnotation);
 
       console.log("📐 Final Structure from Vision:");
       console.log(`   Title: ${structure.title || "None"}`);
@@ -141,7 +150,7 @@ class OCRService {
 
       const confidence = this.calculateVisionConfidence(textAnnotation);
 
-      // ✅ CHANGED: Only apply OCR-specific corrections, NOT spelling
+      // Only apply OCR-specific corrections, NOT spelling
       let correctedText = contentOnlyText;
       const ocrCorrections = { patterns: [] };
 
@@ -150,15 +159,16 @@ class OCRService {
       correctedText = patternResult.text;
       ocrCorrections.patterns = patternResult.corrections;
 
-      // ❌ REMOVED: No spelling correction here
+      // No spelling correction here
       // The grading service will handle spelling errors
 
       console.log(
         `   ✅ OCR corrections applied: ${ocrCorrections.patterns.length}`
       );
+      console.log("dataEssay", dataEssay);
 
       return {
-        text: correctedText,
+        text: dataEssay ? dataEssay : correctedText,
         originalText: fullText,
         confidence: confidence,
         source: "google_vision",
@@ -1310,6 +1320,3 @@ class OCRService {
 }
 
 module.exports = new OCRService();
-
-
-

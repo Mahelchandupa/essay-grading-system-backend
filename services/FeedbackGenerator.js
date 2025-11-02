@@ -2,9 +2,10 @@ const natural = require("natural");
 const compromise = require("compromise");
 const SpellChecker = require("simple-spellchecker");
 const axios = require("axios");
+const EnhancedOpenAIService = require('./EnhancedOpenAIService');
 
 /**
- * ✅ COMPREHENSIVE FeedbackGenerator Class
+ * COMPREHENSIVE FeedbackGenerator Class
  * Handles ALL feedback generation logic in one place
  */
 class FeedbackGenerator {
@@ -95,6 +96,256 @@ class FeedbackGenerator {
       });
     });
   }
+
+  // ----------- NEW ---------
+
+  /**
+   * Generate feedback with OpenAI explanations
+   */
+  async generateEnhancedFeedback(params) {
+    const {
+      text,
+      studentLevel,
+      score,
+      qualityScores,
+      grammarErrors,
+      spellingErrors,
+      essayStructure,
+      levelSpecific = false
+      // ... other params
+    } = params;
+
+    console.log("🤖 Generating enhanced feedback with OpenAI...");
+
+    // Generate base feedback (your existing method)
+    const baseFeedback = await this.generate(params);
+
+    // OpenAI-enhanced explanations
+    const enhancedFeedback = await this.addAIExplanations(
+      baseFeedback,
+      text,
+      score,
+      qualityScores,
+      grammarErrors,
+      essayStructure,
+      studentLevel
+    );
+
+    return enhancedFeedback;
+  }
+
+  /**
+   * AI-powered explanations to feedback
+   */
+  async addAIExplanations(
+    baseFeedback,
+    essayText,
+    score,
+    qualityScores,
+    grammarErrors,
+    essayStructure,
+    studentLevel
+  ) {
+    try {
+      // 1. Get detailed score explanation
+      const scoreExplanation =
+        await EnhancedOpenAIService.generateScoreExplanation(
+          score,
+          qualityScores,
+          essayText,
+          studentLevel
+        );
+
+      // 2. Get argument structure analysis
+      const argumentAnalysis =
+        await EnhancedOpenAIService.analyzeArgumentStructure(
+          essayText,
+          essayStructure
+        );
+
+      // 3. Get contextual examples
+      const contextualExamples =
+        await EnhancedOpenAIService.generateContextualExamples(
+          grammarErrors,
+          essayText,
+          studentLevel
+        );
+
+      // 4. Get writing pattern analysis
+      const patternAnalysis =
+        await EnhancedOpenAIService.analyzeWritingPatterns(essayText);
+
+      // Merge AI-enhanced content into feedback
+      return {
+        ...baseFeedback,
+
+        // Enhanced content feedback
+        contentFeedback: this.enhanceContentFeedback(
+          baseFeedback.contentFeedback,
+          scoreExplanation,
+          argumentAnalysis
+        ),
+
+        // Enhanced before/after examples
+        beforeAfterExamples: [
+          ...(baseFeedback.beforeAfterExamples || []),
+          ...contextualExamples,
+        ].slice(0, 5),
+
+        // Add pattern analysis
+        writingPatterns: patternAnalysis.patternAnalysis,
+
+        // Enhanced assessment summary
+        assessmentSummary: this.enhanceAssessmentSummary(
+          baseFeedback.assessmentSummary,
+          scoreExplanation,
+          argumentAnalysis
+        ),
+
+        // Add detailed explanations
+        detailedExplanations: {
+          scoreBreakdown: scoreExplanation.scoreExplanation,
+          argumentStructure: argumentAnalysis.argumentAnalysis,
+          specificRecommendations: this.generateSpecificRecommendations(
+            scoreExplanation,
+            argumentAnalysis,
+            patternAnalysis
+          ),
+        },
+      };
+    } catch (error) {
+      console.error("AI explanation enhancement failed:", error);
+      return baseFeedback; // Fallback to original feedback
+    }
+  }
+
+  /**
+   *  Enhance content feedback with specific examples
+   */
+  enhanceContentFeedback(
+    baseContentFeedback,
+    scoreExplanation,
+    argumentAnalysis
+  ) {
+    const enhanced = { ...baseContentFeedback };
+
+    // Add specific examples from AI analysis
+    if (scoreExplanation?.scoreExplanation?.specificExamples) {
+      enhanced.examples = [
+        ...(enhanced.examples || []),
+        ...scoreExplanation.scoreExplanation.specificExamples,
+      ];
+    }
+
+    // Add argument-specific feedback
+    if (argumentAnalysis?.argumentAnalysis) {
+      const argAnalysis = argumentAnalysis.argumentAnalysis;
+
+      if (
+        argAnalysis.thesisClarity === "unclear" ||
+        argAnalysis.thesisClarity === "missing"
+      ) {
+        enhanced.improvements.push(
+          "Your thesis statement needs to be clearer and more specific"
+        );
+      }
+
+      if (argAnalysis.specificIssues && argAnalysis.specificIssues.length > 0) {
+        enhanced.improvements.push(
+          ...argAnalysis.specificIssues.map(
+            (issue) => `${issue.type.replace("_", " ")}: ${issue.suggestion}`
+          )
+        );
+      }
+
+      // Add strengths from argument analysis
+      if (argAnalysis.strengths && argAnalysis.strengths.length > 0) {
+        enhanced.strengths = [...enhanced.strengths, ...argAnalysis.strengths];
+      }
+    }
+
+    return enhanced;
+  }
+
+  /**
+   * Enhance assessment summary with specific insights
+   */
+  enhanceAssessmentSummary(baseSummary, scoreExplanation, argumentAnalysis) {
+    const enhanced = { ...baseSummary };
+
+    if (scoreExplanation?.scoreExplanation) {
+      const explanation = scoreExplanation.scoreExplanation;
+
+      enhanced.overallComment =
+        explanation.overallReason || enhanced.overallComment;
+
+      // Add specific improvement areas
+      if (
+        explanation.improvementAreas &&
+        explanation.improvementAreas.length > 0
+      ) {
+        enhanced.weaknesses = [
+          ...enhanced.weaknesses,
+          ...explanation.improvementAreas,
+        ].slice(0, 5);
+      }
+
+      // Add specific strengths
+      if (explanation.strengths && explanation.strengths.length > 0) {
+        enhanced.strengths = [
+          ...enhanced.strengths,
+          ...explanation.strengths,
+        ].slice(0, 5);
+      }
+
+      enhanced.improvementFocus =
+        explanation.nextSteps?.[0] || enhanced.improvementFocus;
+    }
+
+    return enhanced;
+  }
+
+  /**
+   * Generate specific recommendations from AI analysis
+   */
+  generateSpecificRecommendations(
+    scoreExplanation,
+    argumentAnalysis,
+    patternAnalysis
+  ) {
+    const recommendations = [];
+
+    // From score explanation
+    if (scoreExplanation?.scoreExplanation?.nextSteps) {
+      recommendations.push(...scoreExplanation.scoreExplanation.nextSteps);
+    }
+
+    // From argument analysis
+    if (argumentAnalysis?.argumentAnalysis?.specificIssues) {
+      argumentAnalysis.argumentAnalysis.specificIssues.forEach((issue) => {
+        recommendations.push(`In ${issue.location}: ${issue.suggestion}`);
+      });
+    }
+
+    // From pattern analysis
+    if (patternAnalysis?.patternAnalysis) {
+      const patterns = patternAnalysis.patternAnalysis;
+
+      if (patterns.sentenceVariety?.suggestion) {
+        recommendations.push(patterns.sentenceVariety.suggestion);
+      }
+
+      if (patterns.wordChoice?.suggestions) {
+        recommendations.push(
+          `Try using: ${patterns.wordChoice.suggestions.slice(0, 2).join(", ")}`
+        );
+      }
+    }
+
+    return recommendations.slice(0, 5);
+  }
+
+  // -----------------------
 
   /**
    * MAIN FEEDBACK GENERATION METHOD
@@ -277,35 +528,41 @@ class FeedbackGenerator {
   }
 
   /**
- * ✅ NEW: Generate structure information for feedback
- */
-generateStructureInfo(essayStructure, analysis) {
-  if (!essayStructure || !essayStructure.paragraphs || essayStructure.paragraphs.length === 0) {
+   * Generate structure information for feedback
+   */
+  generateStructureInfo(essayStructure, analysis) {
+    if (
+      !essayStructure ||
+      !essayStructure.paragraphs ||
+      essayStructure.paragraphs.length === 0
+    ) {
+      return {
+        hasStructure: false,
+        message: "No clear structure detected",
+      };
+    }
+
     return {
-      hasStructure: false,
-      message: "No clear structure detected",
+      hasStructure: true,
+      title: essayStructure.title || null,
+      sectionCount: essayStructure.sections.length,
+      sections: essayStructure.sections,
+      paragraphCount: essayStructure.paragraphs.length,
+      message: `Essay has clear structure with ${essayStructure.sections.length} sections and ${essayStructure.paragraphs.length} paragraphs`,
+      sectionsDetected: essayStructure.sections.map((section, index) => ({
+        order: index + 1,
+        title: section,
+        paragraphsInSection: essayStructure.paragraphs.filter(
+          (p) => p.section === section
+        ).length,
+      })),
     };
   }
-
-  return {
-    hasStructure: true,
-    title: essayStructure.title || null,
-    sectionCount: essayStructure.sections.length,
-    sections: essayStructure.sections,
-    paragraphCount: essayStructure.paragraphs.length,
-    message: `Essay has clear structure with ${essayStructure.sections.length} sections and ${essayStructure.paragraphs.length} paragraphs`,
-    sectionsDetected: essayStructure.sections.map((section, index) => ({
-      order: index + 1,
-      title: section,
-      paragraphsInSection: essayStructure.paragraphs.filter((p) => p.section === section).length,
-    })),
-  };
-}
 
   // ==================== FEEDBACK MESSAGE GENERATORS ====================
 
   /**
-   * ✅ Generate grammar feedback message based on student level
+   * Generate grammar feedback message based on student level
    */
   generateGrammarFeedbackMessage(grammarErrors, studentLevel) {
     const errorCount = grammarErrors.length;
@@ -340,7 +597,7 @@ generateStructureInfo(essayStructure, analysis) {
   }
 
   /**
-   * ✅ Generate spelling feedback message based on student level
+   * Generate spelling feedback message based on student level
    */
   generateSpellingFeedbackMessage(spellingErrors, studentLevel) {
     const errorCount = spellingErrors.length;
@@ -375,7 +632,7 @@ generateStructureInfo(essayStructure, analysis) {
   }
 
   /**
-   * ✅ Generate style feedback message
+   * Generate style feedback message
    */
   generateStyleFeedback(styleSuggestions, studentLevel) {
     if (styleSuggestions.length === 0) return null;
@@ -393,7 +650,7 @@ generateStructureInfo(essayStructure, analysis) {
   }
 
   /**
-   * ✅ Generate no error feedback (when student has no errors)
+   * Generate no error feedback (when student has no errors)
    */
   generateNoErrorFeedback(category, studentLevel) {
     const messages = {
@@ -425,7 +682,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== ASSESSMENT SUMMARY ====================
 
   /**
-   * ✅ Generate comprehensive assessment summary
+   * Generate comprehensive assessment summary
    */
   generateAssessmentSummary(
     grammarErrors,
@@ -593,7 +850,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== BEFORE/AFTER EXAMPLES ====================
 
   /**
-   * ✅ Generate before/after examples with level-appropriate explanations
+   * Generate before/after examples with level-appropriate explanations
    */
   async generateBeforeAfterExamples(
     text,
@@ -702,7 +959,7 @@ generateStructureInfo(essayStructure, analysis) {
     }
 
     console.log(
-      `✅ Generated ${examples.length} leveled before/after examples`
+      `Generated ${examples.length} leveled before/after examples`
     );
     return examples.slice(0, 5);
   }
@@ -812,7 +1069,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== POSITIVE FEEDBACK ====================
 
   /**
-   * ✅ Generate positive feedback highlighting good aspects
+   * Generate positive feedback highlighting good aspects
    */
   generatePositiveFeedback(text, studentLevel, analysis) {
     const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
@@ -876,7 +1133,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== VOCABULARY ENHANCEMENTS ====================
 
   /**
-   * ✅ Suggest vocabulary enhancements
+   * Suggest vocabulary enhancements
    */
   async suggestVocabularyEnhancements(text, studentLevel, analysis) {
     if (studentLevel === "beginner") return [];
@@ -975,7 +1232,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== SENTENCE STRUCTURE ANALYSIS ====================
 
   /**
-   * ✅ Analyze sentence structure and provide suggestions
+   * Analyze sentence structure and provide suggestions
    */
   analyzeSentenceStructure(analysis, studentLevel) {
     const issues = [];
@@ -1045,7 +1302,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== CONTENT FEEDBACK ====================
 
   /**
-   * ✅ Generate content-specific feedback
+   * Generate content-specific feedback
    */
   generateContentFeedback(analysis, contentScore, studentLevel) {
     const strengths = [];
@@ -1120,7 +1377,7 @@ generateStructureInfo(essayStructure, analysis) {
       organizationScore: Math.round(organizationScore * 100),
     };
 
-    // ✅ Check structure-based organization
+    // Check structure-based organization
     if (
       essayStructure &&
       essayStructure.sections &&
@@ -1208,7 +1465,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== PERSONALIZED SUMMARY ====================
 
   /**
-   * ✅ Generate personalized summary with actionable insights
+   * Generate personalized summary with actionable insights
    */
   generatePersonalizedSummary(params) {
     const {
@@ -1322,7 +1579,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== NEXT STEP RECOMMENDATIONS ====================
 
   /**
-   * ✅ Generate next step recommendations
+   * Generate next step recommendations
    */
   generateNextStepRecommendations(
     grammarErrors,
@@ -1415,7 +1672,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== MOTIVATIONAL MESSAGE ====================
 
   /**
-   * ✅ Generate motivational message based on performance
+   * Generate motivational message based on performance
    */
   generateMotivationalMessage(score, studentLevel, recentPerformance) {
     const scorePercentage = score;
@@ -1454,7 +1711,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== STYLE DETECTION ====================
 
   /**
-   * ✅ Detect style suggestions with level-appropriate explanations
+   * Detect style suggestions with level-appropriate explanations
    */
   detectStyleSuggestions(text, studentLevel) {
     const suggestions = [];
@@ -1532,7 +1789,7 @@ generateStructureInfo(essayStructure, analysis) {
   // ==================== ESSAY ANALYSIS ====================
 
   /**
-   * ✅ Analyze essay structure and content
+   * Analyze essay structure and content
    */
   analyzeEssay(text, essayStructure = null) {
     const doc = compromise(text);
@@ -1540,7 +1797,7 @@ generateStructureInfo(essayStructure, analysis) {
     const paragraphs = text.split(/\n\n+/).filter((p) => p.trim());
     const words = text.match(/\b\w+\b/g) || [];
 
-    // ✅ Use structure if provided
+    //  Use structure if provided
     let hasIntroduction = false;
     let hasConclusion = false;
     let paragraphCount = paragraphs.length;
@@ -1707,6 +1964,77 @@ generateStructureInfo(essayStructure, analysis) {
 
   escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+}
+
+// Enhanced FeedbackGenerator with level-aware feedback
+class LevelAwareFeedbackGenerator extends FeedbackGenerator {
+  
+  generateLevelSpecificFeedback(params) {
+    const { studentLevel, score, qualityScores, grammarErrors, spellingErrors } = params;
+    
+    const levelTemplates = {
+      beginner: {
+        // Focus on encouragement and basic patterns
+        grammarFocus: "Let's work on these common patterns:",
+        spellingFocus: "Practice these everyday words:",
+        contentFocus: "Great ideas! Let's make them clearer.",
+        nextSteps: [
+          "Read your essay out loud",
+          "Practice the highlighted corrections",
+          "Ask for help when stuck"
+        ]
+      },
+      intermediate: {
+        // Focus on refinement and structure
+        grammarFocus: "Refine these grammatical patterns:",
+        spellingFocus: "Review academic vocabulary:",
+        contentFocus: "Strengthen your arguments with evidence.",
+        nextSteps: [
+          "Use transition words between paragraphs",
+          "Add specific examples",
+          "Check subject-verb agreement"
+        ]
+      },
+      advanced: {
+        // Focus on precision and style
+        grammarFocus: "Polish for academic precision:",
+        spellingFocus: "Ensure technical accuracy:",
+        contentFocus: "Develop sophisticated arguments.",
+        nextSteps: [
+          "Enhance vocabulary variety",
+          "Refine thesis statement",
+          "Improve logical flow"
+        ]
+      }
+    };
+    
+    return levelTemplates[studentLevel] || levelTemplates.beginner;
+  }
+
+  generateProgressiveExamples(grammarErrors, studentLevel) {
+    // Group errors by difficulty level
+    const errorLevels = this.categorizeErrorsByDifficulty(grammarErrors);
+    
+    const examples = {
+      beginner: errorLevels.basic.slice(0, 3),
+      intermediate: [...errorLevels.basic.slice(0, 2), ...errorLevels.intermediate.slice(0, 2)],
+      advanced: [...errorLevels.intermediate.slice(0, 2), ...errorLevels.advanced.slice(0, 2)]
+    };
+    
+    return examples[studentLevel] || examples.beginner;
+  }
+
+  categorizeErrorsByDifficulty(errors) {
+    const basicErrors = ['article_usage', 'basic_spelling', 'simple_verb_tense'];
+    const intermediateErrors = ['subject_verb_agreement', 'pronoun_usage', 'preposition_usage'];
+    const advancedErrors = ['complex_verb_forms', 'conditional_mood', 'subjunctive', 'parallel_structure'];
+    
+    return {
+      basic: errors.filter(e => basicErrors.includes(e.type)),
+      intermediate: errors.filter(e => intermediateErrors.includes(e.type)),
+      advanced: errors.filter(e => advancedErrors.includes(e.type))
+    };
   }
 }
 
