@@ -372,11 +372,11 @@ studentSchema.methods.checkLevelProgression = function () {
  */
 studentSchema.methods.getProgressionThreshold = function () {
   const thresholds = {
-    beginner: 70,
-    intermediate: 80,
-    advanced: 90,
+    beginner: 75,      // Increased from 70
+    intermediate: 85,   // Increased from 80  
+    advanced: 90
   };
-  return thresholds[this.currentLevel] || 70;
+  return thresholds[this.currentLevel] || 75;
 };
 
 /**
@@ -386,104 +386,176 @@ studentSchema.methods.getNextLevel = function () {
   const progression = {
     beginner: "intermediate",
     intermediate: "advanced",
-    advanced: "expert",
+    advanced: "advanced" // Advanced stays advanced (no "expert" level)
   };
   return progression[this.currentLevel] || this.currentLevel;
 };
 
-/**
- * promotion/demotion logic
- */
 studentSchema.methods.assessLevelStability = function () {
-  const recentScores = this.performanceMetrics.recentScores.slice(-4);
+  const recentScores = this.performanceMetrics.recentScores.slice(-5);
 
   if (recentScores.length < 3) {
-    return { action: "none", reason: "insufficient_data" };
+    return {
+      action: "none",
+      reason: "insufficient_data",
+      message: "Submit at least 3 essays for level assessment",
+      avgRecent: 0,
+    };
   }
 
-  const avgRecent =
-    recentScores.reduce((sum, s) => sum + s.score, 0) / recentScores.length;
-  const overallAvg = this.performanceMetrics.avgScore;
+  const scores = recentScores.map((s) => s.score);
+  const avgRecent = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+  const lastThreeScores = scores.slice(-3);
 
-  // ✅ NEW: Check for promotion potential
-  const lastThreeScores = recentScores.slice(-3).map((s) => s.score);
-  const allAbove70 = lastThreeScores.every((s) => s >= 70);
-  const allAbove75 = lastThreeScores.every((s) => s >= 75);
-  const avgAbove80 = avgRecent >= 80;
-
-  // Check for persistent issues
-  const criticalIssues = this.persistentIssues.filter(
-    (issue) => issue.consecutiveCount >= 3 && !issue.resolved
+  console.log(
+    `📊 Level Assessment: ${this.currentLevel}, Scores: ${scores.join(", ")}, Avg: ${avgRecent.toFixed(1)}`
   );
 
-  // ✅ IMPROVED: Promotion criteria (more generous)
+  // ✅ BEGINNER LEVEL LOGIC
   if (this.currentLevel === "beginner") {
-    // Promote from beginner if consistently scoring 70+
-    if (recentScores.length >= 3 && allAbove70) {
+    // Promote to intermediate: Last 3 scores average 70+
+    const lastThreeAvg =
+      lastThreeScores.reduce((a, b) => a + b, 0) / lastThreeScores.length;
+
+    if (lastThreeAvg >= 70 && recentScores.length >= 3) {
       return {
         action: "promote",
         reason: "consistent_good_performance",
-        message: `🎉 Congratulations! Your consistent scores of ${lastThreeScores.join(
-          ", "
-        )} show you're ready for intermediate level!`,
-        avgRecent,
+        newLevel: "intermediate",
+        message: `🎉 Congratulations! Your last 3 scores (${lastThreeScores.join(", ")}) average ${Math.round(lastThreeAvg)}. You're ready for intermediate level!`,
+        avgRecent: Math.round(avgRecent),
       };
     }
-  } else if (this.currentLevel === "intermediate") {
-    // Promote to advanced if consistently scoring 80+
-    if (allAbove75 && avgAbove80) {
+
+    // Beginner+ (approaching intermediate)
+    if (avgRecent >= 60 && avgRecent < 70) {
+      return {
+        action: "none",
+        reason: "approaching_intermediate",
+        category: "beginner+",
+        message: `Great progress! Average: ${Math.round(avgRecent)}. Keep scoring 70+ to reach Intermediate! 🚀`,
+        progress: Math.round(((avgRecent - 60) / 10) * 100),
+        avgRecent: Math.round(avgRecent),
+      };
+    }
+
+    // Still building skills
+    return {
+      action: "none",
+      reason: "building_skills",
+      message: `Keep practicing! Current average: ${Math.round(avgRecent)}. Goal: 70+ average to level up!`,
+      avgRecent: Math.round(avgRecent),
+    };
+  }
+
+  // ✅ INTERMEDIATE LEVEL LOGIC
+  if (this.currentLevel === "intermediate") {
+    // Promote to advanced: Last 3 scores average 82+
+    const lastThreeAvg =
+      lastThreeScores.reduce((a, b) => a + b, 0) / lastThreeScores.length;
+
+    if (lastThreeAvg >= 82 && recentScores.length >= 3) {
       return {
         action: "promote",
         reason: "excellent_performance",
-        message: `🎉 Outstanding! You're ready for advanced level with an average of ${Math.round(
-          avgRecent
-        )}!`,
-        avgRecent,
+        newLevel: "advanced",
+        message: `🎉 Outstanding! Your last 3 scores (${lastThreeScores.join(", ")}) average ${Math.round(lastThreeAvg)}. You're ready for advanced level!`,
+        avgRecent: Math.round(avgRecent),
       };
     }
-  }
 
-  // Demotion criteria (more lenient)
-  if (criticalIssues.length >= 3) {
-    return {
-      action: "demote",
-      reason: "persistent_issues",
-      message: `We've adjusted your level to focus on strengthening ${criticalIssues
-        .map((i) => i.issueType.replace(/_/g, " "))
-        .join(" and ")}. This is temporary!`,
-      issues: criticalIssues.map((i) => i.issueType),
-    };
-  }
+    // Intermediate+ (approaching advanced)
+    if (avgRecent >= 72 && avgRecent < 82) {
+      return {
+        action: "none",
+        reason: "approaching_advanced",
+        category: "intermediate+",
+        message: `Strong work! Average: ${Math.round(avgRecent)}. Keep scoring 82+ to reach Advanced! 💪`,
+        progress: Math.round(((avgRecent - 72) / 10) * 100),
+        avgRecent: Math.round(avgRecent),
+      };
+    }
 
-  // Significant performance drop
-  if (recentScores.length >= 4) {
-    const allBelowAverage = recentScores.every(
-      (s) => s.score < overallAvg * 0.6
-    );
-    if (allBelowAverage && this.currentLevel !== "beginner") {
+    // Demote if consistently poor (below 55)
+    if (avgRecent < 55 && recentScores.length >= 4) {
       return {
         action: "demote",
         reason: "sustained_poor_performance",
-        message: `We've adjusted your level to help you rebuild strong foundations. You can do this!`,
-        avgRecent,
-        overallAvg,
+        newLevel: "beginner",
+        message: `We're moving you to beginner level to rebuild your foundations. You can level back up!`,
+        avgRecent: Math.round(avgRecent),
       };
     }
-  }
 
-  // Warning criteria
-  if (criticalIssues.length >= 2) {
     return {
-      action: "warn",
-      reason: "developing_issues",
-      message: `Focus on improving ${criticalIssues
-        .map((i) => i.issueType.replace(/_/g, " "))
-        .join(" and ")}. Review the feedback carefully!`,
-      issues: criticalIssues.map((i) => i.issueType),
+      action: "none",
+      reason: "stable",
+      message: `Maintaining intermediate level. Average: ${Math.round(avgRecent)}. Keep improving!`,
+      avgRecent: Math.round(avgRecent),
     };
   }
 
-  return { action: "none", reason: "stable" };
+  // ✅ ADVANCED LEVEL LOGIC
+  if (this.currentLevel === "advanced") {
+    // Warn if slipping
+    if (avgRecent < 70) {
+      return {
+        action: "warn",
+        reason: "performance_dip",
+        message: `Your average (${Math.round(avgRecent)}) is below advanced standards. Review feedback carefully!`,
+        avgRecent: Math.round(avgRecent),
+      };
+    }
+
+    // Demote if consistently poor (below 60)
+    if (avgRecent < 60 && recentScores.length >= 5) {
+      return {
+        action: "demote",
+        reason: "sustained_poor_performance",
+        newLevel: "intermediate",
+        message: `Moving you to intermediate to rebuild systematically.`,
+        avgRecent: Math.round(avgRecent),
+      };
+    }
+
+    return {
+      action: "none",
+      reason: "maintaining_advanced",
+      message: `Excellent! Maintaining advanced level (avg: ${Math.round(avgRecent)})!`,
+      avgRecent: Math.round(avgRecent),
+    };
+  }
+
+  // Default
+  return {
+    action: "none",
+    reason: "stable",
+    message: `Average: ${Math.round(avgRecent)}. Keep practicing!`,
+    avgRecent: Math.round(avgRecent),
+  };
+};
+
+/**
+ * Get demotion threshold based on current level
+ */
+studentSchema.methods.getDemotionThreshold = function () {
+  const thresholds = {
+    beginner: 40,    // Beginners don't get demoted
+    intermediate: 55, // Intermediate demoted if consistently below 55
+    advanced: 60     // Advanced demoted if consistently below 60
+  };
+  return thresholds[this.currentLevel] || 50;
+};
+
+/**
+ * Get previous level for demotion
+ */
+studentSchema.methods.getPreviousLevel = function () {
+  const demotionPath = {
+    intermediate: "beginner",
+    advanced: "intermediate" 
+  };
+  return demotionPath[this.currentLevel] || "beginner";
 };
 
 // Update persistent issues after essay grading

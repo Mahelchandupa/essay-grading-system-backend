@@ -38,40 +38,138 @@ class SpellingCheckerService {
   }
 
   /**
-   * ✅ IMPROVED: Check spelling with OpenAI context awareness
-   */
-  async checkSpellingWithContext(text) {
-    if (!this.dictionary) {
-      console.warn("⚠️ Dictionary not ready, skipping spell check");
-      return [];
-    }
-
-    console.log(`🔤 Checking spelling with context...`);
-
-    // Step 1: Find misspelled words using dictionary
-    const potentialErrors = this.findMisspelledWords(text);
+ * Filter out words that are actually correct
+ */
+async checkSpellingWithContext(text) {
+  try {
+    const potentialErrors = this.checkSpelling(text);
     
     if (potentialErrors.length === 0) {
-      console.log(`✅ No spelling errors found`);
       return [];
     }
 
     console.log(`   Found ${potentialErrors.length} potential spelling errors`);
 
-    // Step 2: Use OpenAI to get context-aware corrections
-    if (this.openAIService) {
-      try {
-        const contextualErrors = await this.getContextualCorrections(text, potentialErrors);
-        console.log(`✅ OpenAI improved ${contextualErrors.length} corrections`);
-        return contextualErrors;
-      } catch (error) {
-        console.warn("⚠️ OpenAI correction failed, using dictionary suggestions:", error.message);
-        return potentialErrors;
+    // Use OpenAI to verify which are ACTUAL errors
+    const prompt = `Check these words for spelling errors. Return ONLY the words that are ACTUALLY misspelled.
+
+TEXT CONTEXT:
+"${text.substring(0, 1500)}"
+
+WORDS TO CHECK:
+${potentialErrors.map((e, i) => `${i + 1}. "${e.word}"`).join('\n')}
+
+Return EXACT JSON:
+{
+  "actualErrors": [
+    {
+      "word": "misspelled word",
+      "correction": "correct spelling",
+      "reason": "why it's wrong",
+      "isActualError": true
+    }
+  ]
+}
+
+IMPORTANT: Only include words that are ACTUALLY misspelled. Words like "selfies", "influencers", "online", "cyberbullying" are CORRECT modern English words.`;
+
+    const completion = await this.openAIService.openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are a spelling checker. Only flag words that are ACTUALLY misspelled. Modern words, technical terms, and proper nouns are often correct."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+    });
+
+    const result = JSON.parse(completion.choices[0].message.content);
+    
+    // ✅ Filter: Only return words that are ACTUAL errors
+    const actualErrors = result.actualErrors?.filter(e => e.isActualError === true) || [];
+    
+    // Map back to original format
+    const verifiedErrors = [];
+    for (const error of actualErrors) {
+      const original = potentialErrors.find(e => 
+        e.word.toLowerCase() === error.word.toLowerCase()
+      );
+      
+      if (original) {
+        verifiedErrors.push({
+          ...original,
+          correction: error.correction,
+          aiReason: error.reason,
+          verified: true
+        });
       }
     }
 
-    return potentialErrors;
+    console.log(`   ✅ Verified: ${verifiedErrors.length} ACTUAL spelling errors (filtered out ${potentialErrors.length - verifiedErrors.length} correct words)`);
+    
+    return verifiedErrors;
+
+  } catch (error) {
+    console.error("Context-aware spelling check failed:", error.message);
+    // Fallback to basic check, but filter out common modern words
+    return this.checkSpelling(text).filter(e => 
+      !this.isModernWord(e.word)
+    );
   }
+}
+
+/**
+ * Check if a word is a modern/technical term that's correct
+ */
+isModernWord(word) {
+  const modernWords = new Set([
+    'selfies', 'selfie', 'influencers', 'influencer',
+    'online', 'offline', 'cyberbullying', 'smartphone',
+    'internet', 'wifi', 'app', 'apps', 'email', 'blog',
+    'vlog', 'podcast', 'hashtag', 'trending', 'viral'
+  ]);
+  
+  return modernWords.has(word.toLowerCase());
+}
+
+  /**
+   * ✅ IMPROVED: Check spelling with OpenAI context awareness
+   */
+  // async checkSpellingWithContext(text) {
+  //   if (!this.dictionary) {
+  //     console.warn("⚠️ Dictionary not ready, skipping spell check");
+  //     return [];
+  //   }
+
+  //   console.log(`🔤 Checking spelling with context...`);
+
+  //   // Step 1: Find misspelled words using dictionary
+  //   const potentialErrors = this.findMisspelledWords(text);
+    
+  //   if (potentialErrors.length === 0) {
+  //     console.log(`✅ No spelling errors found`);
+  //     return [];
+  //   }
+
+  //   console.log(`   Found ${potentialErrors.length} potential spelling errors`);
+
+  //   // Step 2: Use OpenAI to get context-aware corrections
+  //   if (this.openAIService) {
+  //     try {
+  //       const contextualErrors = await this.getContextualCorrections(text, potentialErrors);
+  //       console.log(`✅ OpenAI improved ${contextualErrors.length} corrections`);
+  //       return contextualErrors;
+  //     } catch (error) {
+  //       console.warn("⚠️ OpenAI correction failed, using dictionary suggestions:", error.message);
+  //       return potentialErrors;
+  //     }
+  //   }
+
+  //   return potentialErrors;
+  // }
 
   /**
    * ✅ Synchronous method (backward compatible) - no context awareness

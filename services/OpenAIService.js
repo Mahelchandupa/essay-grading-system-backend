@@ -2,7 +2,7 @@ require("dotenv").config();
 const OpenAI = require("openai");
 
 /**
- * ✅ UNIFIED OpenAI Service - All AI calls in one place
+ * OpenAI Service - All AI calls in one place
  * Handles: Grammar Analysis, Explanations, Essay Analysis, Completeness Checking
  */
 class OpenAIService {
@@ -27,7 +27,7 @@ class OpenAIService {
   // ==================== GRAMMAR ANALYSIS ====================
 
   /**
-   * ✅ Analyze essay grammar - Returns comprehensive analysis
+   * Analyze essay grammar - Returns comprehensive analysis
    */
   async analyzeEssayGrammar(text, retryCount = 0) {
     try {
@@ -110,7 +110,7 @@ Find ALL grammar errors. Be thorough but accurate.`,
   }
 
   /**
-   * ✅ Generate adaptive explanations based on student level
+   * Generate adaptive explanations based on student level
    */
   async generateLeveledExplanation(error, studentLevel, essayContext = "") {
     const cacheKey = `${error.original}-${error.correction}-${studentLevel}`;
@@ -155,7 +155,7 @@ Find ALL grammar errors. Be thorough but accurate.`,
   }
 
   /**
-   * ✅ Batch generate explanations for multiple errors
+   * Batch generate explanations for multiple errors
    */
   async generateBatchExplanations(errors, studentLevel, essayContext = "") {
     if (!errors || !Array.isArray(errors) || errors.length === 0) {
@@ -186,7 +186,7 @@ Find ALL grammar errors. Be thorough but accurate.`,
   }
 
   /**
-   * ✅ Check essay completeness and structure
+   * Check essay completeness and structure
    */
   async checkEssayCompleteness(essayText) {
     try {
@@ -235,7 +235,7 @@ Return ONLY valid JSON:
   }
 
   /**
-   * ✅ Convert OpenAI corrections to standardized format
+   * Convert OpenAI corrections to standardized format
    */
   async convertToStandardErrors(
     openAICorrections,
@@ -488,6 +488,28 @@ Keep it short - they understand grammar.`,
         service: "OpenAI Unified Service",
         error: error.message,
       };
+    }
+  }
+
+  /**
+   * Get text embeddings using OpenAI
+   */
+  async getEmbedding(text) {
+    try {
+      const response = await this.openai.embeddings.create({
+        model: "text-embedding-ada-002",
+        input: text,
+        encoding_format: "float",
+      });
+
+      return {
+        embedding: response.data[0].embedding,
+        model: response.model,
+        tokens: response.usage.total_tokens,
+      };
+    } catch (error) {
+      console.error("OpenAI embedding error:", error);
+      throw new Error("Failed to generate text embeddings");
     }
   }
 }

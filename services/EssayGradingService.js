@@ -114,6 +114,14 @@ class EssayGradingService {
       const normalizedFeatures = this.normalizeFeatures(features);
       const inferenceResult = await this.runInference(normalizedFeatures);
 
+      const adjustedQualityScores = this.applyStudentLevelAdjustment(
+        inferenceResult.qualityScores,
+        student.currentLevel,
+        analysisResult.processedWithSpelling
+      );
+
+      inferenceResult.qualityScores = adjustedQualityScores;
+
       // Generate fully corrected essay
       const fullyCorrectedText = this.generateFullyCorrectedEssay(
         text,
@@ -124,45 +132,62 @@ class EssayGradingService {
         student.currentLevel
       );
 
+      // Calculate scores
+      const wordCount =
+        analysisResult.processedWithSpelling.split(/\s+/).length;
+
+      const scoringFeedback = {
+        grammarErrors: analysisResult.grammarErrors || [],
+        spellingErrors: analysisResult.spellingErrors || [],
+        analysisMetadata: {
+          wordsAnalyzed: wordCount,
+        },
+      };
+
+      const scoreResult = this.scoringCalibration.calculateFinalScore(
+        adjustedQualityScores, // qualityScores
+        inferenceResult.score, // rawScore
+        ocrConfidence, // ocrConfidence
+        scoringFeedback, // feedback
+        wordCount, // wordCount
+        essayStructure, // essayStructure
+        student.currentLevel // studentLevel
+      );
+
+      const updatedInferenceResult = {
+        ...inferenceResult,
+        qualityScores: adjustedQualityScores,
+        score: scoreResult.score, // Use the final calculated score
+      };
+
+      const grade = this.scoringCalibration.calculateGrade(scoreResult.score);
+      const gradeDescription = this.getGradeDescription(grade);
+
+      const studentHistory = await this.getStudentHistory(student._id);
+
       // Generate feedback with structure
-      const feedback = await this.feedbackGenerator.generate({
+      const feedback = await this.feedbackGenerator.generateWithAI({
         text: analysisResult.processedWithSpelling,
         studentLevel: student.currentLevel,
         studentProfile: student.profile,
         persistentIssues: student.persistentIssues,
-        score: inferenceResult.score,
-        qualityScores: inferenceResult.qualityScores,
+        score: scoreResult.score,
+        qualityScores: adjustedQualityScores,
         recentPerformance: student.performanceMetrics.recentScores,
         ocrCorrections: ocrCorrections,
         grammarErrors: analysisResult.grammarErrors,
         spellingErrors: analysisResult.spellingErrors,
         essayStructure: essayStructure,
+        studentHistory: studentHistory,
       });
 
-      // Calculate scores
-      const wordCount =
-        analysisResult.processedWithSpelling.split(/\s+/).length;
-      const scoreResult = this.scoringCalibration.calculateFinalScore(
-        inferenceResult.qualityScores,
-        inferenceResult.score,
-        ocrConfidence,
-        feedback,
-        wordCount,
-        essayStructure,
-        student.currentLevel
-      );
-
-      const grade = this.scoringCalibration.calculateGrade(scoreResult.score);
-      const gradeDescription = this.getGradeDescription(grade);
-
       // Generate personalized feedback
-      const studentHistory = await this.getStudentHistory(student._id);
       console.log("STUDENT HISTORY", studentHistory);
       const personalizedFeedback = this.generatePersonalizedFeedback(
         student,
         studentHistory,
         scoreResult.score,
-        inferenceResult.qualityScores,
+        updatedInferenceResult.qualityScores,
         feedback
       );
 
@@ -195,14 +220,14 @@ class EssayGradingService {
           detectedAt: new Date(),
         },
         grading: {
-          rawScore: inferenceResult.score,
-          normalizedScore: inferenceResult.normalizedScore,
+          rawScore: inferenceResult.score, // Original raw score from Python
+          normalizedScore: updatedInferenceResult.normalizedScore,
           finalScore: scoreResult.score,
           grade: grade,
           gradeDescription: gradeDescription,
-          confidence: inferenceResult.confidence,
+          confidence: updatedInferenceResult.confidence,
           uncertaintyRange: scoreResult.uncertaintyRange,
-          qualityScores: inferenceResult.qualityScores,
+          qualityScores: adjustedQualityScores, // Adjusted scores
           calibrationVersion: "improved-v2",
           validatedErrors: {
             grammar: analysisResult.grammarErrors.length,
@@ -213,7 +238,7 @@ class EssayGradingService {
         detectedIssues: [],
         gradedAt: new Date(),
         status: "graded",
-        achievementsUnlocked: [], // ✅ Initialize empty array
+        achievementsUnlocked: [],
       };
 
       const essay = await Essay.create(essayDocument);
@@ -303,6 +328,8 @@ class EssayGradingService {
         }`
       );
 
+      console.log("assessAndUpdateLevel", this.assessAndUpdateLevel(student));
+
       return {
         essay: finalEssay, // Now includes achievementsUnlocked array
         studentLevel: student.currentLevel,
@@ -322,6 +349,112 @@ class EssayGradingService {
         originalError: error.message,
       });
     }
+  }
+
+  async assessAndUpdateLevel(student) {
+    try {
+      console.log("\n🎯 === LEVEL ASSESSMENT START ===");
+      console.log(`   Current Level: ${student.currentLevel}`);
+      console.log(
+        `   Recent Scores: ${student.performanceMetrics.recentScores
+          .map((s) => s.score)
+          .join(", ")}`
+      );
+
+      const assessment = student.assessLevelStability();
+
+      console.log(`   Assessment Result:`);
+      console.log(`   - Action: ${assessment.action}`);
+      console.log(`   - Reason: ${assessment.reason}`);
+      console.log(`   - Message: ${assessment.message}`);
+      console.log(`   - Avg Recent: ${assessment.avgRecent}`);
+
+      // Apply the assessment
+      if (assessment.action === "promote") {
+        const previousLevel = student.currentLevel;
+        student.currentLevel = assessment.newLevel || student.getNextLevel();
+
+        student.levelHistory.push({
+          level: student.currentLevel,
+          changedAt: new Date(),
+          reason: assessment.reason,
+          triggeredBy: "system_promotion",
+        });
+
+        console.log(
+          `   🎓 PROMOTED: ${previousLevel} → ${student.currentLevel}`
+        );
+      } else if (assessment.action === "demote") {
+        const previousLevel = student.currentLevel;
+        student.currentLevel =
+          assessment.newLevel || student.getPreviousLevel();
+
+        student.levelHistory.push({
+          level: student.currentLevel,
+          changedAt: new Date(),
+          reason: assessment.reason,
+          triggeredBy: "system_demotion",
+        });
+
+        console.log(
+          `   📉 DEMOTED: ${previousLevel} → ${student.currentLevel}`
+        );
+      } else if (assessment.action === "warn") {
+        console.log(`   ⚠️ WARNING: ${assessment.message}`);
+      } else {
+        console.log(`   ✅ STABLE: No level change`);
+      }
+
+      console.log("🎯 === LEVEL ASSESSMENT END ===\n");
+
+      return assessment;
+    } catch (error) {
+      console.error("❌ Level assessment error:", error);
+      return {
+        action: "none",
+        reason: "error",
+        message: "Level assessment temporarily unavailable",
+      };
+    }
+  }
+
+  /**
+   * Apply student-level adjustments to scores
+   */
+  applyStudentLevelAdjustment(qualityScores, studentLevel, essayText) {
+    const adjusted = { ...qualityScores };
+    const wordCount = essayText.split(/\s+/).length;
+
+    console.log(`🎯 Applying student-level adjustments for ${studentLevel}`);
+    console.log(`   Original:`, qualityScores);
+
+    if (studentLevel === "beginner") {
+      const hasGoodStructure = essayText.split(/\n\n+/).length >= 3;
+      const hasConclusion = /conclusion|in summary|to conclude/i.test(
+        essayText.toLowerCase()
+      );
+      const hasGoodLength = wordCount > 150;
+
+      // ✅ MUCH MORE CONSERVATIVE BOOSTS
+      if (hasGoodStructure && hasConclusion && hasGoodLength) {
+        console.log(`   ✅ Conservative beginner boost applied`);
+
+        // Small, realistic boosts
+        adjusted.grammar = Math.min(0.75, adjusted.grammar + 0.05);
+        adjusted.content = Math.min(0.78, adjusted.content + 0.08);
+        adjusted.organization = Math.min(0.8, adjusted.organization + 0.1);
+        adjusted.style = Math.min(0.7, adjusted.style + 0.05);
+        adjusted.mechanics = Math.min(0.75, adjusted.mechanics + 0.05);
+      }
+    }
+
+    // ✅ CAP ALL SCORES AT REALISTIC LEVELS
+    Object.keys(adjusted).forEach((key) => {
+      adjusted[key] = Math.min(0.85, adjusted[key]); // Max 0.85 for beginners
+    });
+
+    console.log(`   Final Adjusted:`, adjusted);
+    return adjusted;
   }
 
   async processEssayWithAI(processedText, studentLevel, essayStructure) {
@@ -1084,16 +1217,18 @@ class EssayGradingService {
       return insights;
     }
 
-    const historicalScores = history.essays.map((e) => e.grading.finalScore);
+    // ✅ FIX: Use finalScore, not rawScore
+    const historicalScores = history.essays.map((e) => e.grading.finalScore); // ✅ Changed from rawScore
     const avgHistoricalScore =
       historicalScores.reduce((a, b) => a + b, 0) / historicalScores.length;
 
     insights.progressComparison = {
-      currentScore: currentScore,
+      currentScore: Math.round(currentScore), // ✅ This is now finalScore (75), not rawScore (8.2)
       averageScore: Math.round(avgHistoricalScore),
       improvement: Math.round(currentScore - avgHistoricalScore),
     };
 
+    // Rest of the method stays the same...
     if (qualityScores.grammar < 0.7) {
       insights.improvementAreas.push("Focus on grammar accuracy");
     }
@@ -1130,15 +1265,54 @@ class EssayGradingService {
   }
 
   async assessAndUpdateLevel(student) {
-    const assessment = student.assessLevelStability();
+    try {
+      const assessment = student.assessLevelStability();
 
-    return {
-      action: assessment.action,
-      reason: assessment.reason,
-      message: this.getStableMessage(student),
-      previousLevel: student.currentLevel,
-      newLevel: student.currentLevel,
-    };
+      console.log(
+        `🎯 Level Assessment: ${assessment.action} - ${assessment.reason}`
+      );
+
+      // Apply the assessment action
+      if (assessment.action === "promote") {
+        const previousLevel = student.currentLevel;
+        student.currentLevel = assessment.newLevel || student.getNextLevel();
+
+        student.levelHistory.push({
+          level: student.currentLevel,
+          changedAt: new Date(),
+          reason: assessment.reason,
+          triggeredBy: "system_promotion",
+        });
+
+        console.log(
+          `🎓 Student promoted: ${previousLevel} → ${student.currentLevel}`
+        );
+      } else if (assessment.action === "demote") {
+        const previousLevel = student.currentLevel;
+        student.currentLevel =
+          assessment.newLevel || student.getPreviousLevel();
+
+        student.levelHistory.push({
+          level: student.currentLevel,
+          changedAt: new Date(),
+          reason: assessment.reason,
+          triggeredBy: "system_demotion",
+        });
+
+        console.log(
+          `📉 Student demoted: ${previousLevel} → ${student.currentLevel}`
+        );
+      }
+
+      return assessment;
+    } catch (error) {
+      console.error("Level assessment error:", error);
+      return {
+        action: "none",
+        reason: "error",
+        message: "Level assessment temporarily unavailable",
+      };
+    }
   }
 
   getStableMessage(student) {
@@ -1229,23 +1403,18 @@ class EssayGradingService {
 
   getGradeDescription(grade) {
     const descriptions = {
-      // A: "Excellent - Very strong work",
-      // B: "Good - Solid understanding",
-      // C: "Average - Meets basic expectations",
-      // D: "Below Average - Needs improvement",
-      // F: "Failing - Major revision needed",
-
-      "A+": "Excellent – Exceptional mastery and coherence",
-      A: "Very Good – Clear structure and strong content",
-      "A–": "Good – Minor issues but strong writing overall",
-      "B+": "Above Average – Some improvement needed in detail",
-      B: "Average – Solid foundation, moderate errors",
-      "B–": "Fair – Needs improvement in clarity and grammar",
-      "C+": "Satisfactory – Meets minimum expectations",
-      C: "Marginal Pass – Limited analysis and organization",
-      "C–": "Borderline – Major issues in structure/grammar",
-      "D+": "Weak – Minimal understanding, poor writing quality",
-      F: "Fail – Does not meet basic academic standards",
+      A: "Excellent – Strong writing with minor errors",
+      "A-": "Very Good – Clear writing with some errors",
+      "B+": "Good – Solid writing with noticeable errors",
+      B: "Satisfactory – Adequate writing with several errors",
+      "B-": "Fair – Basic writing with multiple errors",
+      "C+": "Developing – Emerging skills with frequent errors",
+      C: "Needs Improvement – Basic comprehension with many errors",
+      "C-": "Weak – Significant improvement needed",
+      "D+": "Poor – Major issues throughout",
+      D: "Very Poor – Fundamental writing problems",
+      "D-": "Failing – Does not meet basic standards",
+      F: "Fail – Unacceptable writing quality",
     };
     return descriptions[grade] || "Needs improvement";
   }

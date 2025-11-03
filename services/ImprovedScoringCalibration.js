@@ -1,104 +1,101 @@
-/**
- * Better scoring calibration to avoid harsh penalties
- *
- * This class fixes the issue where good essays scored too low (64/100)
- * New approach: Gentler calibration with context-aware penalties
- *
- * Expected improvement: CV2 essay 64 → 86-88 (D+ → A-)
- */
-
 class ImprovedScoringCalibration {
   constructor() {
     this.baseCalibration = -0.01; // Minimal base adjustment
   }
 
   /**
-   * ✅ FIXED: Context-aware score calibration
+   * Context-aware score calibration
    */
   calculateFinalScore(
     qualityScores,
     rawScore,
     ocrConfidence,
     feedback,
-    wordCount
+    wordCount,
+    essayStructure,
+    studentLevel
   ) {
-    // Extract error counts
-    const spellingErrorCount = feedback?.spellingErrors?.length || 0;
-    const grammarErrorCount = feedback?.grammarErrors?.length || 0;
-    const realGrammarErrors = this.filterRealGrammarErrors(
-      feedback?.grammarErrors || []
-    );
-    const realSpellingErrors = this.filterRealSpellingErrors(
-      feedback?.spellingErrors || []
-    );
+    const grammarErrorCount = feedback.grammarErrors?.length || 0;
+    const spellingErrorCount = feedback.spellingErrors?.length || 0;
 
-    console.log(`📊 Error Analysis:`);
     console.log(
-      `   Spelling: ${realSpellingErrors.length} real errors (${spellingErrorCount} total)`
-    );
-    console.log(
-      `   Grammar: ${realGrammarErrors.length} real errors (${grammarErrorCount} total)`
+      `📊 SEPARATED Error Analysis: Grammar=${grammarErrorCount}, Spelling=${spellingErrorCount}`
     );
 
-    // ✅ Calibrate scores with GENTLE adjustments
-    const calibratedScores = {
-      grammar: this.calibrateGrammar(
-        qualityScores.grammar,
-        realGrammarErrors.length,
-        wordCount
-      ),
-      content: this.calibrateContent(qualityScores.content),
-      organization: this.calibrateOrganization(
-        qualityScores.organization,
-        wordCount,
-        ocrConfidence
-      ),
-      style: this.calibrateStyle(
-        qualityScores.style,
-        realSpellingErrors.length
-      ),
-      mechanics: this.calibrateMechanics(
-        qualityScores.mechanics,
-        realSpellingErrors.length,
-        wordCount
-      ),
-    };
+    // ✅ MORE ACCURATE QUALITY SCORE ADJUSTMENT
+    let adjustedScores = { ...qualityScores };
 
-    console.log(`📊 Calibrated Scores:`, calibratedScores);
+    // Calculate error density separately
+    const grammarDensity = grammarErrorCount / (wordCount / 100);
+    const spellingDensity = spellingErrorCount / (wordCount / 100);
 
-    // ✅ Weighted average with NEW weights
+    // Grammar penalties (more impactful)
+    if (grammarDensity > 5) {
+      adjustedScores.grammar = Math.max(0.4, adjustedScores.grammar - 0.2);
+    } else if (grammarDensity > 3) {
+      adjustedScores.grammar = Math.max(0.5, adjustedScores.grammar - 0.1);
+    } else if (grammarDensity > 1) {
+      adjustedScores.grammar = Math.max(0.6, adjustedScores.grammar - 0.05);
+    }
+
+    // Spelling penalties (less impactful)
+    if (spellingDensity > 5) {
+      adjustedScores.mechanics = Math.max(0.5, adjustedScores.mechanics - 0.1);
+    } else if (spellingDensity > 3) {
+      adjustedScores.mechanics = Math.max(0.6, adjustedScores.mechanics - 0.05);
+    }
+
+    // Calculate average from ADJUSTED scores
     const avgQuality =
-      calibratedScores.grammar * 0.3 + // Increased from 0.25
-      calibratedScores.content * 0.25 +
-      calibratedScores.organization * 0.2 +
-      calibratedScores.style * 0.15 +
-      calibratedScores.mechanics * 0.1; // Reduced from 0.15
+      (adjustedScores.grammar +
+        adjustedScores.content +
+        adjustedScores.organization +
+        adjustedScores.style +
+        adjustedScores.mechanics) /
+      5;
 
-    // ✅ IMPROVED: Better score mapping
     let finalScore = this.mapQualityToScore(avgQuality);
 
-    // ✅ Context-aware penalties (much gentler)
-    let penalty = this.calculatePenalties(
-      realGrammarErrors.length,
-      realSpellingErrors.length,
-      qualityScores.organization,
-      wordCount,
-      ocrConfidence
+    // ✅ SEPARATED PENALTIES
+    let penalty = 0;
+
+    // Grammar penalties (more severe)
+    if (grammarErrorCount > 10) penalty += 15;
+    else if (grammarErrorCount > 5) penalty += 8;
+    else if (grammarErrorCount > 2) penalty += 3;
+
+    // Spelling penalties (less severe)
+    if (spellingErrorCount > 8) penalty += 6;
+    else if (spellingErrorCount > 5) penalty += 4;
+    else if (spellingErrorCount > 2) penalty += 2;
+
+    // Structure bonus for having clear sections
+    if (
+      essayStructure &&
+      essayStructure.sections &&
+      essayStructure.sections.length >= 2
+    ) {
+      penalty -= 3; // Reward good structure
+    }
+
+    // Word count consideration
+    if (wordCount > 250) {
+      penalty -= 2; // Reward adequate length
+    }
+
+    finalScore = Math.max(45, finalScore - penalty);
+
+    console.log(
+      `🎯 Final Score: ${finalScore}/100 (Quality: ${avgQuality.toFixed(
+        2
+      )}, Penalty: -${penalty})`
     );
 
-    finalScore -= penalty;
-
-    // ✅ Apply OCR uncertainty
-    let uncertaintyRange = this.calculateUncertainty(ocrConfidence);
-
-    // ✅ Final bounds
-    finalScore = Math.min(Math.max(finalScore, 40), 98);
-    finalScore = Math.round(finalScore);
-
-    console.log(`🎯 Final Score: ${finalScore}/100 (±${uncertaintyRange})`);
-    console.log(`   Applied penalty: -${penalty} points`);
-
-    return { score: finalScore, uncertaintyRange };
+    return {
+      score: Math.round(finalScore),
+      uncertaintyRange: this.calculateUncertainty(ocrConfidence),
+      adjustedQualityScores: adjustedScores,
+    };
   }
 
   /**
@@ -180,35 +177,33 @@ class ImprovedScoringCalibration {
    * Grammar calibration
    */
   calibrateGrammar(score, errorCount, wordCount) {
-    let calibrated = score;
+    console.log(
+      `📝 Grammar calibration: score=${score}, errors=${errorCount}, words=${wordCount}`
+    );
 
-    // ✅ NO base penalty if no errors!
+    // MAJOR BOOST for zero grammar errors
     if (errorCount === 0) {
-      return Math.max(0.6, Math.min(0.95, calibrated)); // Just bounds
+      console.log(`   ✅ PERFECT GRAMMAR - Major boost applied`);
+      return Math.min(0.95, score + 0.35); // Big boost for perfect grammar
     }
 
-    // Very gentle base adjustment only if there are errors
-    calibrated -= 0.01;
+    // Minimal penalty for few errors
+    const errorRate = errorCount / (wordCount / 100);
 
-    // Error-based penalty (scaled by essay length)
-    const errorRate = errorCount / (wordCount / 100); // Errors per 100 words
-
-    if (errorRate > 3) {
-      calibrated -= 0.08; // Severe
-    } else if (errorRate > 1.5) {
-      calibrated -= 0.05; // Moderate
-    } else if (errorRate > 0.5) {
-      calibrated -= 0.02; // Minor
+    if (errorRate <= 0.5) {
+      return Math.max(0.7, score - 0.05); // Tiny penalty
+    } else if (errorRate <= 1.0) {
+      return Math.max(0.65, score - 0.1); // Small penalty
     }
 
-    return Math.max(0.45, Math.min(0.95, calibrated));
+    return Math.max(0.5, score - 0.15);
   }
 
   /**
    * Content calibration
    */
   calibrateContent(score) {
-    // ✅ Very minimal adjustment
+    // Very minimal adjustment
     return Math.max(0.55, Math.min(0.95, score - 0.01));
   }
 
@@ -310,22 +305,60 @@ class ImprovedScoringCalibration {
   /**
    * More generous quality-to-score mapping
    */
-  mapQualityToScore(avgQuality) {
-    // MORE GENEROUS mapping
-    if (avgQuality >= 0.85) {
-      return 92 + (avgQuality - 0.85) * 40; // 92-98 range
-    } else if (avgQuality >= 0.75) {
-      return 85 + (avgQuality - 0.75) * 70; // 85-92 range
-    } else if (avgQuality >= 0.65) {
-      return 78 + (avgQuality - 0.65) * 70; // 78-85 range (was 72-82)
-    } else if (avgQuality >= 0.55) {
-      return 68 + (avgQuality - 0.55) * 100; // 68-78 range
-    } else if (avgQuality >= 0.45) {
-      return 55 + (avgQuality - 0.45) * 130; // 55-68 range
-    } else {
-      return 40 + avgQuality * 40; // 40-55 range
-    }
+  // mapQualityToScore(avgQuality) {
+  //   // MORE GENEROUS mapping
+  //   if (avgQuality >= 0.85) {
+  //     return 92 + (avgQuality - 0.85) * 40; // 92-98 range
+  //   } else if (avgQuality >= 0.75) {
+  //     return 85 + (avgQuality - 0.75) * 70; // 85-92 range
+  //   } else if (avgQuality >= 0.65) {
+  //     return 78 + (avgQuality - 0.65) * 70; // 78-85 range (was 72-82)
+  //   } else if (avgQuality >= 0.55) {
+  //     return 68 + (avgQuality - 0.55) * 100; // 68-78 range
+  //   } else if (avgQuality >= 0.45) {
+  //     return 55 + (avgQuality - 0.45) * 130; // 55-68 range
+  //   } else {
+  //     return 40 + avgQuality * 40; // 40-55 range
+  //   }
+  // }
+
+  // mapQualityToScore(avgQuality) {
+  //   // More generous mapping that reflects actual writing quality
+  //   if (avgQuality >= 0.85) return 90;
+  //   if (avgQuality >= 0.8) return 85;
+  //   if (avgQuality >= 0.75) return 80;
+  //   if (avgQuality >= 0.7) return 75;
+  //   if (avgQuality >= 0.65) return 70;
+  //   if (avgQuality >= 0.6) return 65;
+  //   if (avgQuality >= 0.55) return 60;
+  //   if (avgQuality >= 0.5) return 55;
+  //   if (avgQuality >= 0.45) return 50;
+  //   return 45;
+  // }
+
+  /**
+ * Proper score mapping from Python raw score (0-12) to final score (0-100)
+ */
+mapQualityToScore(avgQuality, rawScoreFromPython = null) {
+  // If we have a Python raw score, use it directly with proper mapping
+  if (rawScoreFromPython !== null) {
+    // Python raw score is typically 3.5-12.0, map to 0-100
+    const mappedScore = ((rawScoreFromPython - 3.5) / (12.0 - 3.5)) * 100;
+    return Math.max(0, Math.min(100, mappedScore));
   }
+
+  // Fallback to quality-based mapping
+  if (avgQuality >= 0.85) return 90;
+  if (avgQuality >= 0.8) return 85;
+  if (avgQuality >= 0.75) return 80;
+  if (avgQuality >= 0.7) return 75;
+  if (avgQuality >= 0.65) return 70;
+  if (avgQuality >= 0.6) return 65;
+  if (avgQuality >= 0.55) return 60;
+  if (avgQuality >= 0.5) return 55;
+  if (avgQuality >= 0.45) return 50;
+  return 45;
+}
 
   /**
    * VERY GENTLE penalties
@@ -382,17 +415,32 @@ class ImprovedScoringCalibration {
   /**
    * Calculate grade based on the provided grading scale
    */
+  // calculateGrade(score) {
+  //   if (score >= 85) return "A+";
+  //   if (score >= 75) return "A";
+  //   if (score >= 70) return "A-";
+  //   if (score >= 65) return "B+";
+  //   if (score >= 60) return "B";
+  //   if (score >= 55) return "B-";
+  //   if (score >= 50) return "C+";
+  //   if (score >= 45) return "C";
+  //   if (score >= 40) return "C-";
+  //   if (score >= 35) return "D+";
+  //   return "F";
+  // }
+
   calculateGrade(score) {
-    if (score >= 85) return "A+";
-    if (score >= 75) return "A";
-    if (score >= 70) return "A-";
-    if (score >= 65) return "B+";
-    if (score >= 60) return "B";
-    if (score >= 55) return "B-";
-    if (score >= 50) return "C+";
-    if (score >= 45) return "C";
-    if (score >= 40) return "C-";
-    if (score >= 35) return "D+";
+    if (score >= 93) return "A";
+    if (score >= 90) return "A-";
+    if (score >= 87) return "B+";
+    if (score >= 83) return "B";
+    if (score >= 80) return "B-";
+    if (score >= 77) return "C+";
+    if (score >= 73) return "C";
+    if (score >= 70) return "C-";
+    if (score >= 67) return "D+";
+    if (score >= 63) return "D";
+    if (score >= 60) return "D-";
     return "F";
   }
 }

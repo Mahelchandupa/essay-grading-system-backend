@@ -2,7 +2,8 @@ const natural = require("natural");
 const compromise = require("compromise");
 const SpellChecker = require("simple-spellchecker");
 const axios = require("axios");
-const EnhancedOpenAIService = require('./EnhancedOpenAIService');
+const EnhancedOpenAIService = require("./EnhancedOpenAIService");
+const AdaptiveFeedbackService = require("./AdaptiveFeedbackService");
 
 /**
  * COMPREHENSIVE FeedbackGenerator Class
@@ -111,7 +112,7 @@ class FeedbackGenerator {
       grammarErrors,
       spellingErrors,
       essayStructure,
-      levelSpecific = false
+      levelSpecific = false,
       // ... other params
     } = params;
 
@@ -132,6 +133,64 @@ class FeedbackGenerator {
     );
 
     return enhancedFeedback;
+  }
+
+  /**
+   * Generate complete adaptive feedback using AI
+   */
+  async generateWithAI(params) {
+    const {
+      text,
+      studentLevel,
+      score,
+      qualityScores,
+      grammarErrors,
+      spellingErrors,
+      essayStructure,
+      studentHistory,
+    } = params;
+
+    console.log("🤖 Generating AI-powered adaptive feedback...");
+
+    // Get base feedback (existing method)
+    const baseFeedback = await this.generate(params);
+
+    // Get enhanced AI feedback
+    const aiFeedback = await AdaptiveFeedbackService.generateCompleteFeedback({
+      essayText: text,
+      studentLevel,
+      score,
+      qualityScores,
+      grammarErrors,
+      spellingErrors,
+      essayStructure,
+      studentHistory,
+    });
+
+    // Merge and return
+    return {
+      ...baseFeedback,
+
+      // Add AI-enhanced sections
+      aiEnhanced: {
+        scoreExplanation: aiFeedback.scoreExplanation,
+        errorAnalysis: aiFeedback.errorAnalysis,
+        vocabularyAnalysis: aiFeedback.vocabularyAnalysis,
+        improvementPlan: aiFeedback.improvementPlan,
+        futurePreventionTips: aiFeedback.futurePreventionTips,
+        overallSummary: aiFeedback.overallSummary,
+      },
+
+      // Keep existing structure
+      studentLevel,
+      grammarErrors,
+      spellingErrors,
+      beforeAfterExamples: baseFeedback.beforeAfterExamples,
+      positiveFeedback: baseFeedback.positiveFeedback,
+
+      // Analysis metadata
+      analysisMetadata: baseFeedback.analysisMetadata,
+    };
   }
 
   /**
@@ -958,9 +1017,7 @@ class FeedbackGenerator {
       }
     }
 
-    console.log(
-      `Generated ${examples.length} leveled before/after examples`
-    );
+    console.log(`Generated ${examples.length} leveled before/after examples`);
     return examples.slice(0, 5);
   }
 
@@ -1964,77 +2021,6 @@ class FeedbackGenerator {
 
   escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
-}
-
-// Enhanced FeedbackGenerator with level-aware feedback
-class LevelAwareFeedbackGenerator extends FeedbackGenerator {
-  
-  generateLevelSpecificFeedback(params) {
-    const { studentLevel, score, qualityScores, grammarErrors, spellingErrors } = params;
-    
-    const levelTemplates = {
-      beginner: {
-        // Focus on encouragement and basic patterns
-        grammarFocus: "Let's work on these common patterns:",
-        spellingFocus: "Practice these everyday words:",
-        contentFocus: "Great ideas! Let's make them clearer.",
-        nextSteps: [
-          "Read your essay out loud",
-          "Practice the highlighted corrections",
-          "Ask for help when stuck"
-        ]
-      },
-      intermediate: {
-        // Focus on refinement and structure
-        grammarFocus: "Refine these grammatical patterns:",
-        spellingFocus: "Review academic vocabulary:",
-        contentFocus: "Strengthen your arguments with evidence.",
-        nextSteps: [
-          "Use transition words between paragraphs",
-          "Add specific examples",
-          "Check subject-verb agreement"
-        ]
-      },
-      advanced: {
-        // Focus on precision and style
-        grammarFocus: "Polish for academic precision:",
-        spellingFocus: "Ensure technical accuracy:",
-        contentFocus: "Develop sophisticated arguments.",
-        nextSteps: [
-          "Enhance vocabulary variety",
-          "Refine thesis statement",
-          "Improve logical flow"
-        ]
-      }
-    };
-    
-    return levelTemplates[studentLevel] || levelTemplates.beginner;
-  }
-
-  generateProgressiveExamples(grammarErrors, studentLevel) {
-    // Group errors by difficulty level
-    const errorLevels = this.categorizeErrorsByDifficulty(grammarErrors);
-    
-    const examples = {
-      beginner: errorLevels.basic.slice(0, 3),
-      intermediate: [...errorLevels.basic.slice(0, 2), ...errorLevels.intermediate.slice(0, 2)],
-      advanced: [...errorLevels.intermediate.slice(0, 2), ...errorLevels.advanced.slice(0, 2)]
-    };
-    
-    return examples[studentLevel] || examples.beginner;
-  }
-
-  categorizeErrorsByDifficulty(errors) {
-    const basicErrors = ['article_usage', 'basic_spelling', 'simple_verb_tense'];
-    const intermediateErrors = ['subject_verb_agreement', 'pronoun_usage', 'preposition_usage'];
-    const advancedErrors = ['complex_verb_forms', 'conditional_mood', 'subjunctive', 'parallel_structure'];
-    
-    return {
-      basic: errors.filter(e => basicErrors.includes(e.type)),
-      intermediate: errors.filter(e => intermediateErrors.includes(e.type)),
-      advanced: errors.filter(e => advancedErrors.includes(e.type))
-    };
   }
 }
 
